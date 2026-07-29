@@ -1,0 +1,13 @@
+# Data — not redistributable, and large
+data/raw/
+data/processed/
+
+# Python leftovers
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
