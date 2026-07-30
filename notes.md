@@ -66,6 +66,8 @@ Started 29 July 2026. Target completion 24 August 2026.
 - **Coverage in file:** 20 business days, 1–28 July 2026
 - **Units:** percent, continuously compounded, annual basis
 - **Used for:** discounting (Days 10–11)
+- **Renaming of origiinal file: Previously GLC Nominal daily data current month.xlsx
+ now GLC_nominal_daily_current_month.xlsx
 
 ---
 
@@ -175,4 +177,5 @@ first commit, pushed to GitHub successfully.
 
 **30 July** — Downloaded all three datasets into `data/raw/`.
 Confirmed .gitignore works: repo shows four folders, no data. Spotted
-the continuous compounding error in the original plan (F1). 
+the continuous compounding error in the original plan (F1).
+Pushed the notes after renaming the BoE file to remove spaces.
