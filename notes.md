@@ -174,6 +174,12 @@ re-reads this sheet.
 
 ### - F8 README with data retrieval steps → Day 24
 No README in the repo yet an D4 commits to a README
+
+F9 — HMD outputs in committed notebooks → Day 7.
+Keep displayed HMD extracts small (heads, shapes, plots).
+Do not commit outputs containing large blocks of the raw matrix; D4's non-redistribution 
+reasoning applies to notebook outputs, not just data/raw/.
+
 ---
 
 ## Limitations
