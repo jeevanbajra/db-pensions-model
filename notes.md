@@ -105,6 +105,16 @@ BoE rates are continuously compounded, so v(t) = exp(-y(t) * t) with
 y in decimal. Discounting directly in the source convention rather
 than converting to annual effective, to minimise conversion steps.
 
+### D6 — Gompertz-Makeham fitting range: ages 50–100  → Day 4
+Log-mortality plot (2022-2024, ONS) is near-linear from roughly age 35
+onwards, confirming exponential growth in the senescent range.
+Below ~35 the curve is dominated by infant mortality and the accident
+hump (ages 18-25, pronounced in males), which GM cannot represent.
+Chose 50 rather than 35 as the lower bound because scheme liability is
+concentrated at ages 55+; fitting over the wider range trades accuracy
+where it matters for accuracy where it doesn't.
+Upper bound 100 = limit of ONS data.
+
 ---
 
 ## Flags — issues to handle on a specific day
@@ -148,6 +158,12 @@ onwards. State the chosen window in the report.
 ### F6 — Projection base year mismatch  → Day 9
 HMD data ends 2022; the 2022-2024 base table is centred on 2023.
 State explicitly which year improvements are projected from.
+
+### F7 — ONS sheet: duplicate column names  → Day 4
+Males and females share a single header row, so pandas appends `.1`
+to the female columns (`age.1`, `mx.1`, ...) when reading H:M.
+Columns must be renamed after loading. Will recur when `src/mortality.py`
+re-reads this sheet.
 
 ---
 
