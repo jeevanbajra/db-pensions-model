@@ -56,7 +56,7 @@ Started 29 July 2026. Target completion 24 August 2026.
   published ex(65) validation check (Day 6)
 
 ### 3. Bank of England nominal gilt curve
-- **File:** `data/raw/GLC_Nominal_daily_data_current_month.xlsx`
+- **File:** `data/raw/GLC_nominal_daily_current_month.xlsx`
 - **Source:** bankofengland.co.uk/statistics/yield-curves
 - **Downloaded:** 30 July 2026
 - **Curve:** Government Liability Curve, nominal
@@ -66,7 +66,7 @@ Started 29 July 2026. Target completion 24 August 2026.
 - **Coverage in file:** 20 business days, 1–28 July 2026
 - **Units:** percent, continuously compounded, annual basis
 - **Used for:** discounting (Days 10–11)
-- **Renaming of origiinal file: Previously GLC Nominal daily data current month.xlsx
+- **Renaming of original file:** Previously GLC Nominal daily data current month.xlsx
  now GLC_nominal_daily_current_month.xlsx
 
 ---
@@ -158,6 +158,13 @@ onwards. State the chosen window in the report.
 ### F6 — Projection base year mismatch  → Day 9
 HMD data ends 2022; the 2022-2024 base table is centred on 2023.
 State explicitly which year improvements are projected from.
+CONFIRMED 30 July: curve peaks ~5.77% in the mid-20s, falls to 5.49%
+at 40y. Missing maturity confirmed as 0.5y.
+Consequence for extrapolation: on a downward-sloping segment the
+instantaneous forward rate sits BELOW the spot rate, so holding the
+forward flat beyond 40y makes the extrapolated spot curve continue
+to fall — it does not level off at 5.49%. Expected behaviour, not
+a bug.
 
 ### F7 — ONS sheet: duplicate column names  → Day 4
 Males and females share a single header row, so pandas appends `.1`
@@ -165,6 +172,8 @@ to the female columns (`age.1`, `mx.1`, ...) when reading H:M.
 Columns must be renamed after loading. Will recur when `src/mortality.py`
 re-reads this sheet.
 
+### - F8 README with data retrieval steps → Day 24
+No README in the repo yet an D4 commits to a README
 ---
 
 ## Limitations
@@ -181,7 +190,8 @@ _Accumulating for the report's limitations section (Day 25)._
   scheme-specific or SAPS tables; pension scheme members are typically
   lighter-mortality than the general population.
 - Membership data is synthetic, not a real scheme.
-
+- ONS life table ends at age 100. Fitted GM curve must be extrapolated
+  beyond, or an upper limiting age imposed. Decision required Day 4-5.
 ---
 
 ## Log
@@ -195,3 +205,10 @@ first commit, pushed to GitHub successfully.
 Confirmed .gitignore works: repo shows four folders, no data. Spotted
 the continuous compounding error in the original plan (F1).
 Pushed the notes after renaming the BoE file to remove spaces.
+
+**30-31 July** — Day 2. Both datasets loaded into clean DataFrames.
+ONS validated against published e0 (79.12 M / 83.02 F). Log-mortality
+plot near-linear from ~age 35; accident hump visible at 18-25, larger
+for males; M/F lines parallel above 35 (constant ratio). Gilt curve
+reshaped to 79 maturities, humped with inverted long end. F5 and F7
+both confirmed as predicted.
