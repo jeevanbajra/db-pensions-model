@@ -1,7 +1,8 @@
 # Data — not redistributable, and large
 data/raw/
 data/processed/*
-!data/processed/members.csv   # synthetic, self-generated: no licence issue, keeps the repo runnable
+# members.csv is synthetic and self-generated: no licence issue, keeps the repo runnable
+!data/processed/members.csv
 
 # Python leftovers
 __pycache__/
