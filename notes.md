@@ -1,4 +1,4 @@
-# Project notes: UK DB Pension Funding and Longevity Model
+√# Project notes: UK DB Pension Funding and Longevity Model
 
 Running log of decisions, assumptions and gotchas.
 Started 29 July 2026. Target completion 24 August 2026.
@@ -341,6 +341,102 @@ data/processed/*
 is the first character of the line; anywhere else it becomes part of the
 pattern, and the rule silently matches nothing.
 
+### D10 (1 Aug 2026): Upper limiting age of 120
+
+ONS data stops at age 100. Options were to let the fitted GM curve extrapolate
+beyond 100, or impose an upper limiting age forcing survival to zero. Chose
+both: extrapolate GM from 100 to 120, terminal age 120.
+
+Justification:
+- Immateriality. Survival from 65 to 100 is roughly 4 per cent male and 9 per
+  cent female. Discounting 35 years at 5.5 per cent continuously compounded
+  gives exp(-0.055*35) = 0.146. A pound payable at 100 is worth under a penny
+  today. Ages 100 and above contribute a few tenths of one per cent of total
+  liability.
+- The Day 12 cashflow projection needs a finite terminal age to terminate at
+  all. This is the binding reason, not the modelling one.
+- Terminal age 100 rejected because the oldest members are aged 100 at the
+  valuation date and would be assigned zero liability.
+- 120 is the conventional choice and leaves headroom for every member.
+
+### D11 (1 Aug 2026): Fit to ln(mu) rather than mu
+
+curve_fit minimises the sum of squared absolute errors by default. Between
+ages 50 and 100 mu spans roughly two orders of magnitude (0.003 to 0.45), so
+a 10 per cent error at age 100 contributes around 1800 times more to the
+objective than a 10 per cent error at age 65. An unweighted fit on mu is
+effectively fitting ages 95 to 100 only.
+
+Chose to fit the log of the GM law against observed ln(mu). The residual then
+becomes ln(observed/fitted), a ratio, so every age carries equal weight in
+proportional terms.
+
+Justification:
+- Scheme liability is concentrated at ages 65 to 90, where an unweighted fit
+  puts almost no effort.
+- Mortality rates are deaths over exposure. There are far fewer centenarians
+  than 65 year olds, so the oldest rates are the least reliably estimated and
+  an unweighted fit is most influenced by them.
+- The error that matters is proportional, since survival probabilities and
+  annuity factors scale with proportional error in mu.
+
+Alternative considered: supplying sigma weights to curve_fit proportional to
+mu, which achieves nearly the same reweighting. Rejected as harder to state
+for equivalent benefit. The log scale is also the natural scale for a law
+that is exponential in age.
+
+Note: this means fitting the log of A + B*C^x, not a log-linear function.
+ln(A + B*C^x) does not simplify. Only pure Gompertz gives a straight line.
+
+### D12 (1 Aug 2026): Separate fits by sex
+
+Two independent GM fits, male and female, three parameters each.
+
+The Day 2 and Day 4 log-mortality plots show male and female lines running
+close to parallel across 50 to 100. Parallel on a log scale means the same
+slope and a different intercept, so the same C and a different B. Male
+mortality is a roughly constant multiple of female mortality throughout.
+
+A single fit with a sex adjustment would be defensible but would impose the
+parallelism as an assumption. Two independent fits let the data demonstrate
+it: the fitted C values can be compared afterwards as a check.
+
+A is expected to be poorly determined. Over 50 to 100 the senescent term
+B*C^x runs from about 3e-3 to 4e-1 while A is of order 1e-4, so A is
+swamped by a factor of thirty at the bottom of the range and by thousands at
+the top. A dominates only below about age 30, which is excluded. If A comes
+out negative, that is the data failing to identify it rather than a coding
+error; options then are bounds on curve_fit or falling back to pure Gompertz.
+
+Fitted parameter values to be recorded on Day 5.
+
+### D13 (1 Aug 2026): Scope reduction
+
+The original plan contained no buffer days and assumed full days of work.
+This was not sustainable alongside graduate applications opening late August.
+Revised plan (Project_Plan_Revised.md) cuts three items and adds four buffer
+days. Driver was time pressure, not technical difficulty.
+
+Cut 1: Lee-Carter, replaced by a constant mortality improvement factor of
+1.25 per cent a year, with 0.75 and 1.75 per cent as the sensitivity range.
+Improvement remains in the model and remains a stress test lever. The report
+states that the CMI model is the UK industry standard and that a Lee-Carter
+or CMI implementation is scoped as further work. Deferred, not abandoned.
+HMD data stays in data/raw and in the README retrieval instructions.
+
+Cut 2: spouse's pension applied as a loading of roughly 12 per cent to
+pensioner liability, derived from the 75 per cent married proportion and the
+50 per cent spouse fraction in D7, rather than an explicit reversionary
+annuity calculation.
+
+Cut 3: dashboard reduced to three sliders, four headline metrics, one runoff
+chart and one stress table. Tornado chart and mortality curve plot dropped.
+
+Not cut: deferred members, stress testing, liability duration, unit tests,
+the trustee report, the deployed dashboard.
+
+Model now completes 15 August, everything completes 22 August.
+
 ---
 
 ## Flags: issues to handle on a specific day
@@ -368,10 +464,14 @@ will not reconcile, and the discrepancy will look like a mortality bug.
 All three fail silently. Pandas will load text where numbers are
 expected and the error will surface somewhere unrelated.
 
+DEFERRED (Day 4): Lee-Carter cut from scope, see D13.
+
 ### F4: Restrict Lee-Carter fitting window  (Day 7)
 File starts 1922. Wars and the 1920s contain violent mortality spikes
 unrelated to the long-run improvement trend. Fit from roughly 1970
 onwards. State the chosen window in the report.
+
+DEFERRED (Day 4): Lee-Carter cut from scope, see D13.
 
 ### F5: Gilt curve parsing and shape  (Day 10)
 - Maturities sit on row 4; a junk `#VALUE!` row follows
@@ -392,11 +492,23 @@ onwards. State the chosen window in the report.
 HMD data ends 2022; the 2022-2024 base table is centred on 2023.
 State explicitly which year improvements are projected from.
 
+STILL LIVE, reworded (Day 4). Originally flagged the gap between HMD
+ending 2022 and the 2022-2024 base table centred on 2023. With Lee-Carter
+cut, this now applies to the constant improvement factor: the report must
+state explicitly that improvements are projected from the 2023 base year.
+
+
 ### F7: ONS sheet duplicate column names  (Day 4)
 Males and females share a single header row, so pandas appends `.1`
 to the female columns (`age.1`, `mx.1`, and so on) when reading H:M.
 Columns must be renamed after loading. Will recur when
 `src/mortality.py` re-reads this sheet.
+
+RESOLVED (Day 4). Handled by reading the male and female blocks
+separately with usecols="A:F" and "H:M", then assigning .columns directly,
+so the duplicate .1 names never appeared. Note this method is positional and
+silent: it relies on both blocks sharing the same column ordering, which was
+verified rather than assumed.
 
 ### F8: README with data retrieval steps  (Day 24)
 No README in the repo yet, and D4 commits to one giving full retrieval
@@ -408,6 +520,8 @@ Keep displayed HMD extracts small: heads, shapes, plots. Do not commit
 outputs containing large blocks of the raw matrix. D4's
 non-redistribution reasoning applies to notebook outputs, not just to
 `data/raw/`.
+
+F9: DEFERRED (Day 4): Lee-Carter cut from scope, see D13.
 
 ### F10: Use the implied inflation term structure  (Days 10 to 11)
 Stretch goal. The inflation file (data source 4) has the same five-sheet
@@ -440,10 +554,25 @@ numbers everywhere else. A genuine improvement over the single shared
 sequence currently used, and a good thing to be able to point at. Not
 worth the refactor unless there is spare time near the end.
 
-### — F9 HMD outputs in committed notebooks → Day 7. 
-Keep displayed HMD extracts small (heads, shapes, plots).
-Do not commit outputs containing large blocks of the raw matrix; D4's non-redistribution
-reasoning applies to notebook outputs, not just data/raw/.
+### F14 (1 Aug 2026): Spyder kernel will not start
+
+Spyder launches but the IPython console fails with "An error occurred while
+starting the kernel", showing the conda-libmamba-solver entry point error
+(module libmambapy has no attribute QueryFormat). Spyder appears to treat
+unexpected output on the kernel startup stream as a failure. The same message
+is harmless on the command line.
+
+Checked and ruled out: which spyder gives the environment's own binary, and
+spyder-kernels 3.1.5 is installed in the environment.
+
+Root cause is the conda-libmamba-solver breakage deferred in Environment
+notes. Not repaired: it is a conda dependency untangle with no bearing on
+the model.
+
+Workaround: editing src modules in the JupyterLab text editor and testing
+in notebooks/scratch.ipynb with %autoreload 2. scratch.ipynb is gitignored
+as a workbench rather than a deliverable.
+
 
 ---
 
@@ -494,6 +623,21 @@ _Accumulating for the report's limitations section (Day 25)._
 - Spouse mortality is assumed independent of member mortality.
   Couples' mortality is correlated in practice (the widowhood effect is
   well documented), so this slightly understates the joint liability.
+- Gompertz-Makeham overstates mortality above roughly age 95, where observed
+  mortality decelerates and flattens. Visible in the Day 4 log-mortality plot.
+  Overstating mortality understates survival, which understates liability and
+  the deficit, so the bias runs the imprudent way. Quantifiable on Day 15 by
+  comparing total liability at terminal ages 110 and 120. The standard fix is
+  a logistic blend such as Kannisto above the oldest ages; noted as further
+  work rather than implemented.
+
+- The Makeham constant A is weakly identified over the fitted range 50 to 100,
+  since the senescent term dominates it throughout. See D12.
+
+- Force of mortality assumed constant within each year of age, giving
+  mu_x = -ln(1 - q_x). This is an approximation and is stated in the report.
+  It also means the fitted mu is closest in interpretation to mu at age x+0.5
+  rather than exactly x.
 
 ---
 
@@ -526,3 +670,13 @@ the liability materially. Wrote `src/membership.py`, the first module in
 a total of 8.13m pounds of annual pension. Committed the generated
 `members.csv` alongside it. Also fixed a `.gitignore` negation pattern
 that was silently doing nothing because of an inline comment.
+
+**1 August.** Day 4: Settled D10, D11, D12 before coding. Revised project plan
+to a sustainable scope (D13). Wrote src/mortality.py with load_ons_table,
+add_force_of_mortality, restrict_to_fit_range and plot_log_mortality.
+Validated against Day 2: e(0) of 79.12 male and 83.02 female reproduced
+through a different code path.
+**1 August.** Day 4: Spyder kernel failed (F14), switched to JupyterLab text
+editor plus scratch notebook. Log-mortality plot over 50 to 100 confirms
+near-linear and near-parallel lines, supporting both the GM law and separate
+fits by sex, with visible flattening above 95.
