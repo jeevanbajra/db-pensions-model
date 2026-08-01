@@ -13,3 +13,6 @@ __pycache__/
 .virtual_documents/
 # macOS
 .DS_Store
+
+# Scratch workbench, not a deliverable
+notebooks/scratch.ipynb
