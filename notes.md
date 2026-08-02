@@ -341,7 +341,7 @@ data/processed/*
 is the first character of the line; anywhere else it becomes part of the
 pattern, and the rule silently matches nothing.
 
-### D10 (1 Aug 2026): Upper limiting age of 120
+### D10: Upper limiting age of 120
 
 ONS data stops at age 100. Options were to let the fitted GM curve extrapolate
 beyond 100, or impose an upper limiting age forcing survival to zero. Chose
@@ -359,7 +359,7 @@ Justification:
   valuation date and would be assigned zero liability.
 - 120 is the conventional choice and leaves headroom for every member.
 
-### D11 (1 Aug 2026): Fit to ln(mu) rather than mu
+### D11: Fit to ln(mu) rather than mu
 
 curve_fit minimises the sum of squared absolute errors by default. Between
 ages 50 and 100 mu spans roughly two orders of magnitude (0.003 to 0.45), so
@@ -388,7 +388,7 @@ that is exponential in age.
 Note: this means fitting the log of A + B*C^x, not a log-linear function.
 ln(A + B*C^x) does not simplify. Only pure Gompertz gives a straight line.
 
-### D12 (1 Aug 2026): Separate fits by sex
+### D12: Separate fits by sex
 
 Two independent GM fits, male and female, three parameters each.
 
@@ -410,7 +410,22 @@ error; options then are bounds on curve_fit or falling back to pure Gompertz.
 
 Fitted parameter values to be recorded on Day 5.
 
-### D13 (1 Aug 2026): Scope reduction
+UPDATED (Day 5): the prediction above was wrong. Fitted A is 2.18e-3 male
+and 1.54e-3 female, both positive, with standard errors of 9.7e-5 and 7.5e-5
+respectively, under 5 per cent of the estimate and roughly 21 to 22 standard
+errors from zero. A is therefore well determined over ages 50 to 100, not
+weakly identified.
+
+The error in the original reasoning: B*C^x dominates A at the top of the
+range, but at age 50 B*C^x is about 1.4e-3 against A of 2.2e-3, so A is the
+larger term at the bottom of the fitting range. The crossover sits around
+age 55. The claim that A is swamped throughout the range was not checked
+against the actual crossover point.
+
+All three parameters are tightly estimated: se(B) about 6 per cent of B,
+se(C) about 0.07 per cent of C.
+
+### D13: Scope reduction
 
 The original plan contained no buffer days and assumed full days of work.
 This was not sustainable alongside graduate applications opening late August.
