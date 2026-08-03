@@ -40,6 +40,13 @@ FIT_AGE_MIN = 50                 # D6
 FIT_AGE_MAX = 100                # D6, upper limit of ONS data
 UPPER_LIMITING_AGE = 120         # D10
 
+BASE_YEAR = 2023                 # D2, midpoint of the 2022-2024 period table
+VALUATION_YEAR = 2026            # D3
+BASE_TO_VALUATION = VALUATION_YEAR - BASE_YEAR
+IMPROVEMENT_RATE = 0.0125         # D13, 1.25% a year
+IMPROVEMENT_LOW = 0.0075          # D13, sensitivity
+IMPROVEMENT_HIGH = 0.0175         # D13, sensitivity
+
 def load_ons_table(path=ONS_PATH, sheet=ONS_SHEET):
     """
     Loads one period sheet from the ONS National Life Tables.
@@ -198,3 +205,55 @@ def survival_probability(x, t, A, B, C):
     term_3 = C**t - 1
     t_p_x = np.exp(-(term_1 + term_2*term_3))
     return t_p_x
+
+def life_expectancy(x, A, B, C):
+    """
+    Computes complete period life expectancy at age x, under the fitted Gompertz-Makeham.
+    Period in this instance means current mortality rates held fixed for all future ages,
+    with no allowance for improvement, ONS table is a period table and the published e(65)
+    is a period figure, so the comparison is like for like.
+    
+    Numerical integration of t_p_x from t = 0 to the upper limiting age,
+    using the trapezoidal rule.
+    The integral is truncated at the upper limiting age of 120 (D10),
+    understating the result very slightly.
+    Trapezoidal integration over integer steps gives the complete expectation
+    rather than the curtate one, so no half-year adjustment is applied.
+
+    Age x, and the fitted A, B, C for the relevant sex.
+
+    Returns expected further years of life.
+
+    At x = 65 this gives 18.26 male and 20.66 female against published ONS figures of 
+    18.73 and 21.16, so within half a year. Both understate, consistent with the old-age 
+    flattening limitation.
+    """
+    t_vals = np.arange(0, 56)
+    s_prob = survival_probability(x, t_vals, A, B, C)
+    p_life = np.trapezoid(s_prob, t_vals)
+    return p_life
+
+def improved_force_of_mortality(x, years_from_valuation, A, B, C, improvement=IMPROVEMENT_RATE):
+    """
+    The force of mortality at age x, projected forward to a calendar year years_from_valuation
+    after the valuation date, with mortality improvement applied (mu_at_x).
+
+    Constant annual improvement of 1.25% per D13, compounding, 
+    replacing the Lee-Carter projection that was cut from scope.
+    0.75% and 1.75% provide the sensitivity range, with improvement being a parameter,
+    so it may be varied in the future.
+
+    Improvement compounds from the 2023 base year (2022-2024 period table centred on 2023), 
+    the three years between the base year and the 2026 valuation date are added internally.
+    years_from_valuation = 0 gets mortality already improved by three years, which is deliberate.
+
+    Gompertz-Makeham is a law about the force of mortality, so improvement is applied there 
+    and converted to q afterwards if needed (q = 1 - exp(-mu)).
+
+    Args: Age x, and the fitted A, B, C for the relevant sex, years_from_valuation and improvemnt.
+    Returns mu_at_x, stated above
+    """
+    GM_at_x = A + B*C**x
+    compounding_factor = (1 - improvement)**(BASE_TO_VALUATION + years_from_valuation)
+    mu_at_x = GM_at_x * compounding_factor
+    return mu_at_x
