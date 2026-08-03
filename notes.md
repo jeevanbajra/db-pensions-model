@@ -359,6 +359,15 @@ Justification:
   valuation date and would be assigned zero liability.
 - 120 is the conventional choice and leaves headroom for every member.
 
+CORRECTED (Day 5): the immateriality arithmetic above used a survival
+estimate of roughly 4 per cent from age 65 to 100, taken from memory rather
+than from the model. The fitted model gives 35_p_65 = 0.0091 for males.
+
+A pound payable at age 100 is therefore worth about 0.0091 * 0.146 = 0.0013,
+so roughly a tenth of a penny today rather than under one penny. The
+conclusion is unchanged and the case for immateriality is stronger than
+originally stated.
+
 ### D11: Fit to ln(mu) rather than mu
 
 curve_fit minimises the sum of squared absolute errors by default. Between
@@ -424,6 +433,29 @@ against the actual crossover point.
 
 All three parameters are tightly estimated: se(B) about 6 per cent of B,
 se(C) about 0.07 per cent of C.
+
+Fitted values (Day 5):
+
+Male:   A = 2.181e-03, B = 5.643e-06, C = 1.12152
+Female: A = 1.540e-03, B = 2.074e-06, C = 1.13096
+
+Standard errors, order A, B, C:
+Male:   [9.73e-05, 3.51e-07, 8.08e-04]
+Female: [7.47e-05, 1.62e-07, 1.03e-03]
+
+Mortality doubling time, ln(2)/ln(C): 6.04 years male, 5.63 years female.
+Shorter than the classic figure of around 8 years because the fit starts at
+age 50, where the curve is steepest, rather than spanning the full adult
+range.
+
+The two fitted C values agree to one decimal place, 1.12 against 1.13,
+supporting the same-C-different-B reading of the parallel log-mortality
+lines. The pure Gompertz baseline agreed more closely still, at 1.1071 and
+1.1142.
+
+Starting values came from the log-linear Gompertz baseline (B and C) with A
+guessed at 1e-4. The fitted A is roughly twenty times that guess, which did
+not prevent convergence.
 
 ### D13: Scope reduction
 
@@ -588,7 +620,29 @@ Workaround: editing src modules in the JupyterLab text editor and testing
 in notebooks/scratch.ipynb with %autoreload 2. scratch.ipynb is gitignored
 as a workbench rather than a deliverable.
 
+### F15 (2 Aug 2026): log-scale objective is undefined for negative mu
 
+curve_fit emits "RuntimeWarning: invalid value encountered in log" during
+optimisation of the Gompertz-Makeham fit, for both sexes. Cause: the model
+function returns np.log(A + B*C**x), and while exploring the parameter space
+the optimiser tries combinations where A + B*C^x is negative at the lower end
+of the age range. np.log of a negative number is NaN, which numpy warns about
+rather than raising.
+
+Both fits recovered and converged, with all three parameters estimated to
+tight standard errors, so the final result is unaffected. The warning
+describes the path, not the destination.
+
+No action taken. The risk is that the Day 22 re-fit on a stressed base table
+(q_x multiplied by 1.1) may wander further into the invalid region and fail
+to recover. The known fix is to constrain the optimiser:
+
+    bounds=([0, 0, 1], [np.inf, np.inf, np.inf])
+
+forcing A and B non-negative and C at least 1. Not applied now because
+supplying bounds changes the algorithm curve_fit uses internally, and the
+current fit is already validated against the data. Apply only if the Day 22
+fit misbehaves.
 ---
 
 ## Limitations
@@ -654,6 +708,33 @@ _Accumulating for the report's limitations section (Day 25)._
   It also means the fitted mu is closest in interpretation to mu at age x+0.5
   rather than exactly x.
 
+- The Gompertz-Makeham residuals show a systematic wave rather than random
+  scatter. Observed minus fitted ln(mu) is negative at ages 50 to 54,
+  positive at 55 to 70, negative at 71 to 86, positive at 87 to 97, and
+  negative at 98 to 100. Both sexes trace the same shape almost exactly,
+  so this is functional-form error rather than sampling noise: two
+  independent fits to two independent datasets would not produce the same
+  wave by chance.
+
+  Maximum absolute deviation is about 0.08 in log units, so roughly 8 per
+  cent in mu, occurring near ages 76 and 91. Over ages 50 to 100 the fitted
+  curve is within 8 per cent of observed mortality everywhere, which is a
+  reasonable result for a three-parameter model spanning two orders of
+  magnitude.
+
+  The negative lobe at 71 to 86 means the fit overstates mortality where
+  pensioner liability is concentrated, which understates liability and the
+  deficit. The positive lobe at 87 to 97 partly offsets this. Richer
+  functional forms such as Perks, Beard, or a logistic model fit UK adult
+  mortality better and are what the CMI and most UK insurers use. Noted as
+  further work rather than implemented.
+
+- The old-age flattening limitation now has a number attached. The fitted
+  model gives 35_p_65 = 0.0091 for males, so roughly 1 per cent of 65 year
+  old males are projected to reach 100, against a national life table figure
+  nearer 3 to 4 per cent. This is the expected consequence of GM continuing
+  to compound above age 95 where observed mortality decelerates.
+
 ---
 
 ## Log
@@ -695,3 +776,16 @@ through a different code path.
 editor plus scratch notebook. Log-mortality plot over 50 to 100 confirms
 near-linear and near-parallel lines, supporting both the GM law and separate
 fits by sex, with visible flattening above 95.
+
+**2 August.** Day 5: Fitted a log-linear pure Gompertz baseline by np.polyfit
+on ln(mu) to obtain starting values (C = 1.1071 male, 1.1142 female). Fitted
+the full Gompertz-Makeham by curve_fit on ln(mu), separately by sex, with
+p0 from the baseline plus A = 1e-4. Both converged. All three parameters
+tightly estimated; the Makeham constant A proved well determined, contrary
+to the prediction in D12, which has been corrected.
+2026-08-02 (Day 5): Built fitted-against-raw and residual diagnostic plots.
+Residuals show a systematic wave within plus or minus 8 per cent in mu across
+50 to 100, logged as a limitation. Derived and implemented the closed-form
+t-year survival probability by integrating the GM force of mortality
+analytically. Validated: 0_p_65 = 1.0 exactly, 10_p_65 = 0.8151,
+20_p_65 = 0.4488, 35_p_65 = 0.0091, monotonically decreasing throughout.
