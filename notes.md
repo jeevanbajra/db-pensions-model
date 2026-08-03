@@ -484,6 +484,49 @@ the trustee report, the deployed dashboard.
 
 Model now completes 15 August, everything completes 22 August.
 
+### D14: Mortality improvement basis and base year
+
+Constant annual mortality improvement of 1.25 per cent, compounding,
+applied to the force of mortality. Sensitivity range 0.75 and 1.75 per cent
+(D13). Replaces the Lee-Carter projection cut from scope.
+
+Applied to mu rather than to q, because Gompertz-Makeham is a law about the
+force of mortality. Conversion to q, where needed, follows afterwards via
+q_x = 1 - exp(-mu_x).
+
+Base year is 2023, the midpoint of the 2022-2024 period table (D2).
+Improvement compounds from 2023, not from the valuation date. The valuation
+date is 28 July 2026 (D3), so three years of improvement have already
+elapsed at the point of valuation, and a payment made at the valuation date
+carries a factor of (1 - 0.0125)^3, about 0.963.
+
+The three-year offset is applied inside improved_force_of_mortality rather
+than left to the caller. BASE_YEAR and VALUATION_YEAR are module constants
+and the gap is derived from them. This was a deliberate design choice: if
+the offset were the caller's responsibility, forgetting it on Day 12 would
+have overstated every mortality rate by about 3.7 per cent, understating
+liability, with no error raised. Closes F6.
+
+### D15: Life expectancy calculation method
+
+Complete period life expectancy computed as the integral of t_p_x from
+t = 0, evaluated by the trapezoidal rule (np.trapezoid) over integer steps
+of t.
+
+Period rather than cohort: current mortality held fixed with no improvement
+allowance. This is deliberate, because the published ONS e(65) used for
+validation is a period figure and the comparison must be like for like.
+The improvement factor is applied separately in the projection, not here.
+
+Trapezoidal integration over integer steps returns the complete expectation
+rather than the curtate one, because it effectively averages consecutive
+survival probabilities. No half-year adjustment is added. Adding one would
+overstate the result by half a year.
+
+Integral truncated at the upper limiting age of 120 (D10) rather than run
+to infinity, so t runs from 0 to 55 at age 65. This understates the result
+very slightly.
+
 ---
 
 ## Flags: issues to handle on a specific day
@@ -544,6 +587,11 @@ ending 2022 and the 2022-2024 base table centred on 2023. With Lee-Carter
 cut, this now applies to the constant improvement factor: the report must
 state explicitly that improvements are projected from the 2023 base year.
 
+RESOLVED (Day 6): handled in D14. Improvement compounds from the 2023 base
+year, with the three-year gap to the 2026 valuation date applied inside
+improved_force_of_mortality via the module constants BASE_YEAR and
+VALUATION_YEAR. Documented in the function docstring and stated in D14 for
+the report.
 
 ### F7: ONS sheet duplicate column names  (Day 4)
 Males and females share a single header row, so pandas appends `.1`
@@ -737,6 +785,43 @@ _Accumulating for the report's limitations section (Day 25)._
 
 ---
 
+##Checkpoints
+
+### Checkpoint 1 (3 Aug 2026): graduated table validated against published e(65)
+
+Complete period life expectancy at age 65, computed from the fitted
+Gompertz-Makeham parameters by analytic survival probabilities and
+trapezoidal integration:
+
+              Fitted    ONS published    Difference
+Male          18.26         18.73          -0.47
+Female        20.66         21.16          -0.50
+
+Both within half a year, against a tolerance of roughly one year. The two
+figures come from entirely independent routes: ONS build theirs from the
+raw q_x by their own method, and the fitted figure comes from a
+three-parameter curve integrated analytically.
+
+Both differences are negative and almost identical in size, so the model
+systematically understates life expectancy by about half a year. Two
+contributions, both already documented before this result was seen:
+
+1. Truncation at the upper limiting age of 120 (D10) removes the tail
+   beyond that age. Small, and always in the same direction.
+2. The old-age flattening limitation. GM overstates mortality above age 95,
+   so survivors are removed too quickly in their late nineties. Already
+   quantified on Day 5: the fitted model gives 35_p_65 = 0.0091 for males
+   against a national life table figure nearer 3 to 4 per cent. This
+   accounts for most of the half year.
+
+Consequence for the valuation: understating survival understates liability.
+The shortfall is concentrated at very old ages, which are heavily
+discounted, so the effect on the funding ratio is considerably smaller than
+0.47/18.73 would suggest. To be quantified on Day 15 alongside the
+terminal-age comparison.
+
+---
+
 ## Log
 
 **29 July.** Registered with HMD (instant, no approval delay).
@@ -789,3 +874,15 @@ Residuals show a systematic wave within plus or minus 8 per cent in mu across
 t-year survival probability by integrating the GM force of mortality
 analytically. Validated: 0_p_65 = 1.0 exactly, 10_p_65 = 0.8151,
 20_p_65 = 0.4488, 35_p_65 = 0.0091, monotonically decreasing throughout.
+
+**3 August.**  Day 6: Wrote life_expectancy, computing complete period life
+expectancy by trapezoidal integration of the closed-form survival function
+to the upper limiting age. Validated the graduated table against the
+published ONS e(65): 18.26 against 18.73 male, 20.66 against 21.16 female,
+both within half a year and both understating, consistent with the old-age
+flattening limitation identified on Day 5. Checkpoint 1 passed.
+2026-08-03 (Day 6): Wrote improved_force_of_mortality applying the constant
+1.25 per cent annual improvement to mu, compounding from the 2023 base year
+with the three-year gap to the valuation date handled internally (D14,
+closes F6). Verified the compounding at 0 and 20 years from valuation
+against ln(0.9875) multiples. Mortality module complete.
