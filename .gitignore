@@ -1,8 +1,13 @@
-# Data — not redistributable, and large
+# Data- not redistributable, and large
 data/raw/
 data/processed/*
+
 # members.csv is synthetic and self-generated: no licence issue, keeps the repo runnable
 !data/processed/members.csv
+
+# gilt_curve.csv is a small extract from a rolling monthly source file that will not
+# contain 28 July 2026 next month: committing it keeps the valuation reproducible
+!data/processed/gilt_curve.csv
 
 # Python leftovers
 __pycache__/
