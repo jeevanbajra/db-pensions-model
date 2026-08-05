@@ -1,4 +1,4 @@
-√# Project notes: UK DB Pension Funding and Longevity Model
+# Project notes: UK DB Pension Funding and Longevity Model
 
 Running log of decisions, assumptions and gotchas.
 Started 29 July 2026. Target completion 24 August 2026.
@@ -108,11 +108,11 @@ Most recent available. Excludes 2020 and 2021, which carry severe
 pandemic excess mortality and would build a one-off shock into a
 long-run assumption.
 Rejected: `2019-2021` and `2020-2022`, worst pandemic contamination.
-Rejected: `2017-2019`, clean pre-pandemic, but a base table centred
-on 2018 is eight years stale by the valuation date.
+Rejected: `2017-2019`, pre-pandemic so no issue, but a base table centred
+on 2018 is eight years prior the valuation date.
 Caveat: 2022 mortality was still somewhat elevated. Accepted, flagged
 in Limitations.
-Planned sensitivity: re-run with `2017-2019` once the engine works and
+Planned sensitivity: re-run the engine with `2017-2019` once the engine works and
 report the difference in funding ratio (Day 22 stress testing).
 
 ### D3: Valuation date, 28 July 2026  [CONFIRM]
@@ -120,8 +120,8 @@ Latest gilt curve available in the downloaded file. All discounting
 uses the spot curve as at this date.
 
 ### D4: Raw data gitignored (29 July)
-HMD terms of use do not permit redistribution, and committing their
-data to a public repo would constitute exactly that. Also avoids
+HMD terms of use do not permit redistribution, and so cannot commit their
+data to a public repo. Also avoids
 permanent repo bloat. README must therefore give full retrieval
 instructions for all four files.
 
@@ -138,7 +138,7 @@ accident hump (ages 18 to 25, pronounced in males), which GM cannot
 represent.
 Chose 50 rather than 35 as the lower bound because scheme liability is
 concentrated at ages 55+; fitting over the wider range trades accuracy
-where it matters for accuracy where it does not.
+where it matters, for accuracy where it is not so necessary.
 Upper bound 100 is the limit of ONS data.
 
 ### D7: Scheme design (31 July)
@@ -683,14 +683,12 @@ describes the path, not the destination.
 
 No action taken. The risk is that the Day 22 re-fit on a stressed base table
 (q_x multiplied by 1.1) may wander further into the invalid region and fail
-to recover. The known fix is to constrain the optimiser:
+to recover. The known fix is to constrain the optimiser: 
+bounds=([0, 0, 1], [np.inf, np.inf, np.inf]) forcing A and B non-negative and 
+C at least 1. Not applied now because supplying bounds changes the algorithm 
+curve_fit uses internally, and the current fit is already validated against 
+the data. Apply only if the Day 22 fit misbehaves.
 
-    bounds=([0, 0, 1], [np.inf, np.inf, np.inf])
-
-forcing A and B non-negative and C at least 1. Not applied now because
-supplying bounds changes the algorithm curve_fit uses internally, and the
-current fit is already validated against the data. Apply only if the Day 22
-fit misbehaves.
 ---
 
 ## Limitations
@@ -785,7 +783,7 @@ _Accumulating for the report's limitations section (Day 25)._
 
 ---
 
-##Checkpoints
+## Checkpoints
 
 ### Checkpoint 1 (3 Aug 2026): graduated table validated against published e(65)
 
