@@ -540,6 +540,17 @@ Note that every integer maturity from 1 to 40 is already published, so
 interpolation does nothing in the pensioner-only run. It becomes load
 bearing on Day 14, when deferred members retire at non-integer horizons.
 
+RESOLVED (Day 9): linear on spot rates and flat forward interpolation were
+compared across 781 maturities from 1 to 40 years. The maximum difference
+is 0.674 basis points, at 1.2 years, worth 0.0084 per cent on the discount
+factor at that point. The largest errors occur at the short end where the
+curve has most curvature relative to the half year spacing, and where
+scheme cashflows are lightest. Flat forward sits above linear on spot
+because accumulated interest y(t)*t is convex here and a chord across a
+convex curve lies above it. For scale, the D19 extrapolation choice moves a
+discount factor at 76.78 years by roughly a factor of two, four orders of
+magnitude larger.
+
 ### D17
 Below one year the one-year spot rate is held flat. The BoE publishes a
 monthly short-end curve on sheet 3 of the same file, verified to be the
@@ -570,6 +581,35 @@ rolling file and would otherwise be equally irreproducible.
 No fallback to data/raw is implemented. A missing CSV should fail loudly
 rather than silently switching data path.
 
+### D19
+Above the last published maturity of 40 years, the instantaneous forward
+rate is held flat at its 40 year value of 3.6414 per cent, and the spot
+rate follows as
+
+    y(t) = ( y(40)*40 + f(40)*(t - 40) ) / t
+
+Two alternatives were considered. Holding the spot rate flat at y(40) was
+rejected: it is a refusal to make an assumption rather than an assumption,
+and it implies a forward curve that jumps discontinuously from 3.64 to 5.49
+per cent at 40 years, which no market would price. Convergence to an
+ultimate forward rate, as used under Solvency II, was rejected as not being
+the approach taken in UK DB scheme funding valuations.
+
+The single published f(40) is used rather than an average of the last five
+years of forwards (4.1332 per cent). The averaged version is more stable,
+since f(40) is the endpoint of a steep decline and the least well
+determined point in the fitted curve, but the window length would be
+discretionary and hard to justify. Holding the last published forward flat
+is a rule with no discretion in it. The averaged version is quantified as a
+sensitivity on Day 15.
+
+### D20
+The youngest member is a deferred born 10 May 1983, aged 43.22 at the
+valuation date. With a terminal age of 120 the longest discount horizon is
+76.78 years, of which 47.9 per cent lies beyond the last published
+maturity and is therefore extrapolated rather than observed. For
+pensioners the figure is 27.2 per cent.
+
 ---
 
 ## Flags: issues to handle on a specific day
@@ -584,6 +624,12 @@ Size of error if unfixed: discount factors overstated about 1.6% at 20
 years, about 3.2% at 40 years. Liabilities overstated about 1.5%
 overall.
 Rates in the spreadsheet are percentages, so divide by 100 first.
+
+Supporting evidence (Day 9): the identity f(t) = y(t) + t*y'(t), which
+holds under continuous compounding, was checked at 40 years using a one
+year finite difference. It gives 3.698 per cent against a published
+forward of 3.641 per cent. The convention is therefore visible in the data
+and not only in the documentation.
 
 ### F2: Convention trap in the reconciliation  (Days 12 to 13)
 The hand-calculated annuity check must state its own compounding
@@ -761,6 +807,17 @@ load_curve uses float_precision="round_trip" so that the committed CSV
 reloads bit-for-bit identically to the frame that was written. Immaterial
 to the valuation (differences of order 1e-16) but it would break exact
 equality in the Day 10 unit tests.
+
+### F20
+Nearly half the discount horizon for the youngest members rests on the D19
+extrapolation rather than on observed market data. At t = 76.78 the
+extrapolated spot is 4.6034 per cent, giving a discount factor of 0.029174
+against 0.014790 if the spot were held flat instead, a factor of roughly
+two on the same cashflow. The mitigation is that survival to age 120 is
+vanishingly unlikely so the cashflows out there are minute, but that has
+not yet been quantified. Total liability under both extrapolations to be
+compared on Day 15. This is the largest single piece of judgement in the
+model to date and belongs in the report in plain words.
 
 ---
 
@@ -966,3 +1023,8 @@ and did some grad role application research.
 spot_rate. Both curves extracted and committed. Interpolation verified
 against published points and against the midpoint at 19.75 years.
 Decisions D16 to D18, flags F16 to F19.
+
+**6 August.** Day 9: spot_rate extended above 40 years by flat forward extrapolation, kept
+vectorised with numpy.where and numpy.maximum. discount_factor added as
+exp(-y(t)*t) per F1. D16 quantified and closed. Decisions D19 and D20,
+flag F20.
