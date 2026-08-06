@@ -83,11 +83,25 @@ def spot_rate(t, curve):
     Returns the spot rate at maturity t.
     It interpolates linearly between published points (D16).
     Below one year it holds the one-year rate flat (D17).
+    Above the last published maturity the instantaneous forward is held flat
+    at its 40-year value and the spot follows (D19).
     """
     assert curve["maturity"].is_monotonic_increasing, "maturity is not monotonic increasing"
     xp = curve["maturity"]
     fp = curve["spot_rate"]
-    # above 40 years np.interp holds the last rate flat,
-    # a placeholder pending forward-rate extrapolation. TODO Day 9
-    rates = np.interp(t, xp, fp)
+    last_maturity = xp.iloc[-1]
+    last_spot = fp.iloc[-1]
+    last_forward = curve["forward_rate"].iloc[-1]
+    interpolated = np.interp(t, xp, fp)
+    extrapolated = (last_spot * last_maturity + last_forward * (t - last_maturity)) / np.maximum(t, last_maturity)
+    rates = np.where(t <= last_maturity , interpolated, extrapolated)
     return rates
+
+def discount_factor(t, curve):
+    """
+    Returns the discount factor at maturity t.
+    BoE rates are continuously compounded, hence exp(-y*t) rather than 1/(1+y)^t (F1)
+    """
+    yt = spot_rate(t, curve)
+    vt = np.exp(-yt * t)
+    return vt
