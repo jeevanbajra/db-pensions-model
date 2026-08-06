@@ -527,6 +527,49 @@ Integral truncated at the upper limiting age of 120 (D10) rather than run
 to infinity, so t runs from 0 to 55 at age 65. This understates the result
 very slightly.
 
+### D16
+Interpolation of the gilt spot curve between published half-year points is
+linear on spot rates. Flat-forward interpolation (linear on log discount
+factors) was the alternative considered, and is arguably more consistent
+with the Day 9 extrapolation, which holds the forward flat. Rejected
+because the difference over a half-year gap on a curve this smooth is
+negligible, and one simple stated method is easier to defend than two.
+Difference to be quantified on Day 9.
+
+Note that every integer maturity from 1 to 40 is already published, so
+interpolation does nothing in the pensioner-only run. It becomes load
+bearing on Day 14, when deferred members retire at non-integer horizons.
+
+### D17
+Below one year the one-year spot rate is held flat. The BoE publishes a
+monthly short-end curve on sheet 3 of the same file, verified to be the
+same curve at finer granularity (values match exactly at 1, 2, 3, 4 and
+5 years), running down to 0.583 years at the valuation date. Using it was
+checked and rejected: at t = 0.75 the true rate is 4.0756 per cent against
+4.1225 per cent held flat, giving discount factors of 0.96990 and 0.96956,
+a difference of 0.035 per cent on cashflows that are a negligible share of
+a pensioner scheme's liability.
+
+Implemented by numpy.interp's default endpoint behaviour rather than by an
+explicit branch, which keeps the function vectorised.
+
+### D18
+The valuation date spot and forward curves are extracted from data/raw and
+written to data/processed/gilt_curve.csv, which is committed. The model
+reads only the committed CSV; nothing downstream touches data/raw.
+
+Reason: GLC_nominal_daily_current_month.xlsx is a rolling file. It contains
+only 1 to 28 July 2026 and nothing else, so a reader following the retrieval
+instructions in a later month cannot reproduce the valuation. It is also
+gitignored, so the deployed Streamlit app cannot see it at all (F11).
+
+Both the spot curve and the instantaneous forward curve are captured in the
+same step, because the Day 9 extrapolation reads the forward from the same
+rolling file and would otherwise be equally irreproducible.
+
+No fallback to data/raw is implemented. A missing CSV should fail loudly
+rather than silently switching data path.
+
 ---
 
 ## Flags: issues to handle on a specific day
@@ -568,7 +611,7 @@ DEFERRED (Day 4): Lee-Carter cut from scope, see D13.
 - One maturity missing on 28 July, confirmed as the 0.5-year point
   (BoE: available range depends on which instruments had reliable
   prices). Handle gaps, do not assume a complete row
-- Long end slopes DOWNWARD: curve peaks around 5.77% in the mid-20s,
+- Long end slopes DOWNWARD: curve peaks around 5.8092% in the mid-20s (27 years),
   20y spot about 5.70%, 40y about 5.49%. This is real market structure,
   not a data error
 - CONFIRMED 30 July. Consequence for extrapolation: on a
@@ -688,6 +731,36 @@ bounds=([0, 0, 1], [np.inf, np.inf, np.inf]) forcing A and B non-negative and
 C at least 1. Not applied now because supplying bounds changes the algorithm 
 curve_fit uses internally, and the current fit is already validated against 
 the data. Apply only if the Day 22 fit misbehaves.
+
+### F16
+The gilt curve source file is a rolling monthly download and cannot be
+re-retrieved for 28 July 2026. Closed by D18: the extract is committed.
+The BoE publishes archive files by period which would be a fully
+reproducible route; not investigated, README footnote only.
+
+### F17
+src/mortality.py has the same problem D18 fixes for the gilt curve.
+fit_gompertz_makeham reads nltuk198020223.xlsx from data/raw, which is
+gitignored under D4 and is 594 KB, so the fit cannot run on Streamlit Cloud.
+Fix is the same shape: a run-once extract writing the six fitted parameters
+and their standard errors to data/processed/gm_parameters.csv, committed,
+with the valuation reading that rather than re-fitting. Scheduled Day 15.
+
+### F18
+The 40-year instantaneous forward at the valuation date is 3.6414 per cent
+against a 40-year spot of 5.4880 per cent, a gap of 1.85 percentage points.
+Holding the forward flat beyond 40 years therefore continues the downward
+slope steeply: extrapolated spot rates are 5.2828 per cent at 45 years,
+5.1187 at 50 and 4.9844 at 55. At t = 55 this gives a discount factor 32
+per cent higher than holding the 40-year spot flat. This extends F5 with
+figures. Total liability under both extrapolations to be compared on Day 15.
+
+### F19
+pandas.read_csv loses the final bit of a float64 with its default parser.
+load_curve uses float_precision="round_trip" so that the committed CSV
+reloads bit-for-bit identically to the frame that was written. Immaterial
+to the valuation (differences of order 1e-16) but it would break exact
+equality in the Day 10 unit tests.
 
 ---
 
@@ -884,3 +957,12 @@ flattening limitation identified on Day 5. Checkpoint 1 passed.
 with the three-year gap to the valuation date handled internally (D14,
 closes F6). Verified the compounding at 0 and 20 years from valuation
 against ln(0.9875) multiples. Mortality module complete.
+
+**4 August.**Day 7: Buffer day to catch up on any work that i was not able to 
+complete on time. I had completed everything up to date so i reworded some notes
+and did some grad role application research.
+
+**5 August.** Day 8: src/discounting.py: constants, read_curve_sheet, extract_curves, load_curve,
+spot_rate. Both curves extracted and committed. Interpolation verified
+against published points and against the midpoint at 19.75 years.
+Decisions D16 to D18, flags F16 to F19.
