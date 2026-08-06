@@ -22,9 +22,6 @@ DATE_COLUMN = "years:"           # BoE label on the date column
 
 VALUATION_DATE = pd.Timestamp("2026-07-28")   # D3
 
-MIN_MATURITY = 1.0    # D17, y(1) held flat below this; monthly short-end
-                      # data exists on sheet 3 but the difference is 3bp
-
 def read_curve_sheet(sheet, path=RAW_PATH):
     """
     Return one BoE curve at the valuation date as maturity and rate.
@@ -46,7 +43,7 @@ def read_curve_sheet(sheet, path=RAW_PATH):
     curve = curve.dropna().reset_index(drop=True)
     curve["rate"] = curve["rate"] / 100
     return curve
-    
+
 def extract_curves(path=RAW_PATH, out_path=PROCESSED_PATH):
     """
     Extract the valuation date curves and persist them to CSV (data/processed/gilt_curve.csv).
@@ -59,11 +56,11 @@ def extract_curves(path=RAW_PATH, out_path=PROCESSED_PATH):
     """
     spot = read_curve_sheet(SPOT_SHEET, path=path)
     fwd = read_curve_sheet(FWD_SHEET, path=path)
-    spot = spot.rename(columns={"rate":"spot_rate"})
-    fwd = fwd.rename(columns={"rate":"forward_rate"})
+    spot = spot.rename(columns={"rate": "spot_rate"})
+    fwd = fwd.rename(columns={"rate": "forward_rate"})
     assert fwd["maturity"].equals(spot["maturity"]), "spot and forward maturity grids differ"
     curve = pd.merge(spot, fwd, on="maturity", how="inner")
-    assert len(curve) == len(spot), "merge changed the row count" 
+    assert len(curve) == len(spot), "merge changed the row count"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     curve.to_csv(out_path, index=False)
     return curve
@@ -73,10 +70,24 @@ def load_curve(path=PROCESSED_PATH):
     Return the extracted gilt curve from data/processed.
     Reading the CSV, confirming the three expected columns are present.
     The three expected columns being maturity, spot_rate, forward_rate.
-    Nothing downstream reads as data/raw.
+    Reads data/raw.
     """
     # round_trip forces the exact float parser; the default one loses the
     # last bit and breaks equality against the frame that was written.
-    curve = pd.read_csv(path, float_precision="round_trip") 
+    curve = pd.read_csv(path, float_precision="round_trip")
     assert list(curve.columns) == ["maturity", "spot_rate", "forward_rate"], "unexpected columns in gilt_curve.csv"
     return curve
+
+def spot_rate(t, curve):
+    """
+    Returns the spot rate at maturity t.
+    It interpolates linearly between published points (D16).
+    Below one year it holds the one-year rate flat (D17).
+    """
+    assert curve["maturity"].is_monotonic_increasing, "maturity is not monotonic increasing"
+    xp = curve["maturity"]
+    fp = curve["spot_rate"]
+    # above 40 years np.interp holds the last rate flat,
+    # a placeholder pending forward-rate extrapolation. TODO Day 9
+    rates = np.interp(t, xp, fp)
+    return rates
