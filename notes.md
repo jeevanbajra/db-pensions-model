@@ -610,6 +610,39 @@ valuation date. With a terminal age of 120 the longest discount horizon is
 maturity and is therefore extrapolated rather than observed. For
 pensioners the figure is 27.2 per cent.
 
+### D21: valuation module structure
+
+The annuity factor lives in src/valuation.py rather than in mortality.py or
+discounting.py. It is the product of both, so placing it in either would make
+one module import the other and destroy their independence. mortality.py can
+currently be tested without a gilt curve and discounting.py without a mortality
+table, and that is worth preserving. valuation.py is also where pensioner and
+deferred liabilities will be built, both of which are constructed from this
+function.
+
+### D22: payment timing
+
+Annually in advance. The first payment falls at the valuation date, is certain
+and is undiscounted, so the t = 0 term is exactly 1. Real UK schemes pay
+monthly in advance and the standard approximation is a-due(12) = a-due - 11/24.
+That adjustment is 0.4583 against an annuity factor of roughly 11.7, so about
+3.9 per cent of liability. Not applied yet. See F21.
+
+### D23: mortality basis in the annuity factor
+
+The annuity factor takes the survival function as an argument, survival_fn,
+defaulting to survival_probability. Day 10 uses the period basis deliberately.
+The period basis holds 2022-2024 mortality fixed forever, which is correct for
+the Checkpoint 1 validation against published ONS period life expectancy, and
+wrong for projecting a real member's cashflows, because a member reaching 85 in
+2046 will face 2046 mortality rather than today's. The valuation requires a
+cohort basis with the D14 improvement factor applied through calendar time.
+
+Period was used today because the Checkpoint 2 hand reconciliation needs a
+formula that can be integrated on paper, and because introducing a third moving
+part would have obscured which component was at fault had the reconciliation
+failed. The cohort function is scheduled for Day 12. See F22.
+
 ---
 
 ## Flags: issues to handle on a specific day
@@ -819,6 +852,40 @@ not yet been quantified. Total liability under both extrapolations to be
 compared on Day 15. This is the largest single piece of judgement in the
 model to date and belongs in the report in plain words.
 
+### F21: monthly payment frequency not implemented
+
+Benefits are valued as annual payments in advance. UK schemes pay monthly. The
+11/24 adjustment under D22 is worth about 3.9 per cent of liability, which is
+material and cannot be left silent in the report. To be settled on Day 12,
+either by applying the adjustment or by stating the annual basis as a
+simplification with its size quantified.
+
+### F22: no cohort survival function exists
+
+survival_probability integrates the unimproved Gompertz-Makeham force.
+improved_force_of_mortality exists but nothing integrates it, so there is
+currently no way to compute survival on the D14 improvement basis. The integral
+remains closed form: the improvement factor is exponential in time and
+Gompertz-Makeham is exponential in age, so C is replaced by C*(1-r) in the
+senescence term and the Makeham constant acquires its own exponential decay.
+Scheduled Day 12, before pensioner liabilities.
+
+### F23: payment grid assumes an integer age
+
+annuity_factor builds its payment times with
+np.arange(0, UPPER_LIMITING_AGE - x + 1), which assumes x is a whole number.
+True for the age 65 test case, not true for deferred members retiring at
+non-integer ages. To be settled on Day 14.
+
+### F24: RuntimeWarning during curve_fit
+
+Fitting Gompertz-Makeham emits "invalid value encountered in log", once per
+sex. Investigated and benign. curve_fit trials candidate parameter sets during
+its search, and where A goes negative, A + B*C^x is negative at low ages and
+np.log returns nan rather than raising. The optimiser sees a poor fit and moves
+away. Confirmed the input data is clean: no missing values in qx or mu_x, no qx
+outside (0, 1), no non-positive mu_x. No action required.
+
 ---
 
 ## Limitations
@@ -911,6 +978,19 @@ _Accumulating for the report's limitations section (Day 25)._
   nearer 3 to 4 per cent. This is the expected consequence of GM continuing
   to compound above age 95 where observed mortality decelerates.
 
+- Annuity factors are computed on the period mortality basis at Day 10. The
+  cohort basis under D14 raises them and the difference is to be quantified on
+  Day 12 (F22).
+
+- Benefits are valued annually in advance rather than monthly (F21).
+
+- The Day 5 old-age flattening limitation compares fitted survival to 100
+  against a national life table figure of 3 to 4 per cent. It has not been
+  established whether that comparison figure is a period or a cohort one. If
+  cohort, part of what was attributed to Gompertz-Makeham functional form is
+  actually the period basis. To be checked on Day 15 once both bases are
+  running.
+
 ---
 
 ## Checkpoints
@@ -947,6 +1027,53 @@ The shortfall is concentrated at very old ages, which are heavily
 discounted, so the effect on the funding ratio is considerably smaller than
 0.47/18.73 would suggest. To be quantified on Day 15 alongside the
 terminal-age comparison.
+
+### Checkpoint 2 (Day 10): annuity factor validation. PASSED.
+
+Male aged 65, terminal age 120, annual payments in advance, period mortality
+basis, flat 5 per cent continuously compounded curve.
+
+Reconciled three ways.
+
+Individual terms, hand calculation in Desmos against code output:
+
+  t    t_p_65          v(t)            term
+  0    1.0000000000    1.0000000000    1.0000000000
+  1    0.9875657826    0.9512294245    0.9394016310
+  2    0.9740625009    0.9048374180    0.8813681983
+  3    0.9593920437    0.8607079764    0.8257563845
+
+Agreement to every printed digit.
+
+Total, annuity_factor against a hand-rolled sum written independently in the
+notebook: both 11.747146253364836. Identical to all seventeen digits, so the
+summation and the payment grid carry no error.
+
+Separately, the sum of survival probabilities over the payment grid equals the
+Checkpoint 1 life expectancy plus exactly 0.5, for both sexes. 18.764535919118817
+against e(65) of 18.264535919118817 for males, and 0.4999999999999964 for
+females, the latter differing from 0.5 by float noise of order 1e-15. This falls
+out of the trapezoidal integration used in life_expectancy and validates the
+payment grid against a figure already validated against published ONS data.
+
+On the real gilt curve at the valuation date the annuity factors are
+11.565613695844538 for males and 12.429276334946415 for females.
+
+Compounding convention, F2. The same annuity under effective annual discounting
+at 5 per cent is 11.863569819905354, against 11.747146253364836 continuous. A
+difference of 0.11642356654051866, or 0.991 per cent. 5 per cent continuous is
+5.127109637602412 per cent effective annual, since exp(0.05) - 1 gives that
+figure, so continuous discounting at the same headline rate discounts harder and
+produces the smaller annuity. Just under 1 per cent of liability turns on how
+the discount factor is written, which is the same order of magnitude as a
+plausible mortality error. This is why the convention is stated explicitly in
+the report rather than assumed.
+
+Note on the reconciliation itself: the first attempt disagreed because the hand
+calculation used A^t in place of A*t. The code was correct and the hand
+calculation was wrong. That is the more common outcome and it is still a pass.
+The reconciliation establishes that two independent routes agree, not which one
+is right when they do not.
 
 ---
 
@@ -1028,3 +1155,22 @@ Decisions D16 to D18, flags F16 to F19.
 vectorised with numpy.where and numpy.maximum. discount_factor added as
 exp(-y(t)*t) per F1. D16 quantified and closed. Decisions D19 and D20,
 flag F20.
+
+**7 August.** Day 10: Built src/valuation.py with annuity_factor, the expected present value of one
+pound a year payable annually in advance. Five lines, fully vectorised, no loop.
+Takes the survival function as an argument so the mortality basis can be swapped
+without editing the body (D23).
+Cleared Checkpoint 2, the Day 10 decision gate. See the checkpoint section.
+Added a test suite: pytest 9.0.3, conftest.py at the repo root putting src on
+the import path, seven tests across three files, all passing.
+The payment grid test is the one worth explaining. An earlier draft built the
+grid as np.arange(0, UPPER_LIMITING_AGE + 1) rather than
+np.arange(0, UPPER_LIMITING_AGE - x + 1), running payments for a 65 year old to
+age 185. Summing survival over 0 to 55 and over 0 to 120 gives the identical
+float64 result, because terms beyond about t = 60 underflow to zero, so the bug
+returned the correct number on every input and would have survived any value
+based check. The test instead compares against a sum over an independently
+constructed 56 element grid, at a zero discount rate so the annuity collapses to
+that sum, and hard codes the 56 rather than deriving it from UPPER_LIMITING_AGE,
+so changing the terminal age forces a deliberate change to the test.
+Decisions D21 to D23 added, flags F21 to F24 added.
