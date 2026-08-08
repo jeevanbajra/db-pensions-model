@@ -250,10 +250,28 @@ def improved_force_of_mortality(x, years_from_valuation, A, B, C, improvement=IM
     Gompertz-Makeham is a law about the force of mortality, so improvement is applied there 
     and converted to q afterwards if needed (q = 1 - exp(-mu)).
 
-    Args: Age x, and the fitted A, B, C for the relevant sex, years_from_valuation and improvemnt.
+    Args: Age x, and the fitted A, B, C for the relevant sex, years_from_valuation and improvement.
     Returns mu_at_x, stated above
     """
     GM_at_x = A + B*C**x
     compounding_factor = (1 - improvement)**(BASE_TO_VALUATION + years_from_valuation)
     mu_at_x = GM_at_x * compounding_factor
     return mu_at_x
+
+def survival_probability_cohort(x, t, A, B, C, improvement=IMPROVEMENT_RATE):
+    """
+    Intgrated the improved_force_of_mortality by hand and produced the closed form:
+    d^k[A/ln(d) (d^t -1) + BC^x / ln(Cd) ((Cd)^t -1)].
+    d^k carries the three years from the 2023 base year to the valuation date.
+    if improvement = 0, it divides by ln(1) = 0 and returns nan,
+    the period function is what to use instead.
+    Returns the survival probability for cohort which is the closed form negated and exponentiated
+    """
+    d = 1 - improvement
+    Cd = C * d
+    base_factor = d ** BASE_TO_VALUATION
+    term_2 = (A/np.log(d)) * (d**t - 1)
+    term_3 = ((B*C**x)/np.log(Cd)) * (Cd**t -1)
+    cumulative_hazard = base_factor * (term_2 + term_3)
+    survival_cohort = np.exp(- cumulative_hazard)
+    return survival_cohort
