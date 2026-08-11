@@ -49,6 +49,10 @@ Conventions used in this file:
 | D25 | Pension increases at flat CPI 3.0 per cent | Day 12 |
 | D26 | Per-member loop rather than a masked matrix | Day 13 |
 | D27 | Shared constants imported rather than duplicated | Day 13 |
+| D28 | Deferred revaluation rate | Day 14 |
+| D29 | Deferred period measured exactly | Day 14 |
+| D30 | Deferred payment grid built at retirement age and shifted | Day 14 |
+| D31 | Per-member loop for deferred liability | Day 14 |
 
 ### Flags
 
@@ -76,7 +80,7 @@ Conventions used in this file:
 | F20 | Extrapolation dominates the long horizon | OPEN, Day 15 |
 | F21 | Monthly payment frequency not implemented | RESOLVED Day 12 |
 | F22 | No cohort survival function exists | RESOLVED Day 12 |
-| F23 | Payment grid assumes an integer age | RESOLVED Day 13 for pensioners |
+| F23 | Payment grid assumes an integer age | RESOLVED Day 13 for pensioners, Day 14 for deferreds |
 | F24 | RuntimeWarning during curve_fit | DUPLICATE of F15, Day 12 |
 | F25 | Implied inflation term structure as a sensitivity | OPEN, Day 15 |
 | F26 | LPI cap applied to a central estimate | OPEN, limitations only |
@@ -84,6 +88,7 @@ Conventions used in this file:
 | F28 | membership.py run section was unguarded | RESOLVED Day 13 |
 | F29 | annuity_factor defaults to the period basis | OPEN, Day 15 |
 | F30 | valuation.py imports membership.py | OPEN, Day 15 |
+| F31 | Test suite uses a hardcoded mortality basis | OPEN, Day 15 |
 
 ---
 
@@ -1324,6 +1329,7 @@ which is correct rather than a rounding artefact.
 frequency = 1 reproduces the Day 10 annual grid of 56 elements ending at 55.0,
 which is an independent cross-check against already validated work.
 
+RESOLVED (Day 14): closed on the deferred side by D30.
 
 ### F24: RuntimeWarning during curve_fit
 
@@ -1454,6 +1460,20 @@ IMPROVEMENT_RATE, with every module importing from it and none importing each
 other.
 
 Deferred because it touches three working modules for no change in output.
+
+### F31: test suite uses a hardcoded mortality basis (Day 14, 11 August)
+
+tests/test_valuation.py defines TEST_PARAMS as literal Gompertz-Makeham
+parameters, using the fitted male values for both sexes, so that the suite does
+not depend on data/raw, which is gitignored under D4. None of the three tests
+concerned is about the mortality fit, and a test that depends on fewer things
+fails for fewer reasons.
+
+Superseded when F17 is closed and data/processed/gm_parameters.csv is committed,
+at which point these tests should read the committed file. Scheduled Day 15.
+
+Note that tests/test_mortality.py still re-fits from data/raw, so the suite as a
+whole is not yet clone-and-run.
 
 ---
 
@@ -1954,3 +1974,89 @@ pensioner pension in payment 4569142.85.
 
 Settled D26 and D27. Resolved F23 for pensioners and F28. Partially resolved F12.
 Opened F29 and F30.
+
+### Day 14, Tuesday 11 August
+
+Deferred and active members. Decision gate passed, so the fallback to a
+pensioner-only model is off the table.
+
+Started at 43.5 per cent complete, finished at 49.5, on target. All of the
+movement was in valuation.py, which went from 45 to 70 per cent of its weight,
+and the test suite, which went from 20 to 40.
+
+Derived the deferred EPV from first principles before writing anything. Settled
+three decisions, D28 on the revaluation rate, D29 on measuring the deferred
+period exactly and D30 on how to build the payment grid, and added D31 for the
+loop over members. Closed F23 on the deferred side. Opened F31 on the hardcoded
+test basis.
+
+Built deferred_epv as a direct sum over payment dates, then reconciled it
+against the factorised form, which is the version that would be quoted from a
+textbook. Both routes give 8.396252072692954 for a male aged exactly 45 with a
+pension of one pound. They agree to sixteen significant figures, which they
+should, since the second is the first with constants pulled out of the front.
+
+The point of doing both was to test the claim that the textbook form is easy to
+get wrong. Substituting survival_probability_cohort(65, s) for the correct
+conditional survival gives an annuity at retirement of 15.069777434175714. That
+is not an approximation of the right answer. It is exactly the pensioner
+annuity factor computed on Day 13, to the last digit, which means the naive
+version answers a different question: what this benefit is worth to a man who
+is 65 today. On the deferred EPV the error is 6.16658230435344 per cent.
+
+The fact that two independent routes reproduced the Day 13 figure bit for bit
+is the strongest validation collected so far. One came from pensioner_epv
+yesterday, one from arrays assembled by hand in a notebook today.
+
+Decomposed the 6.571840241772997 per cent gap between the deferred annuity at
+retirement and the current pensioner annuity. Mortality improvement contributes
+7.484516275013786 per cent, forward rather than spot discounting contributes
+-1.9640383530995509 per cent, and the interaction contributes
+1.1372511372794936 per cent. I had parked this as a report exercise for Day 22
+and then did it in two lines because everything was already in memory. Worth
+remembering as a pattern.
+
+Built deferred_liability over all 500 non-pensioners. Total 40807190.86670828
+against a pension roll of 3561058.22, a ratio of 11.459287758206962. Per member
+values run from 8.197147625777536 to 15.976416580397537 per pound.
+
+Provisional scheme total is 92287196.63653848 before the spouse loading. Not to
+be quoted as the Technical Provisions until that is applied on Day 15.
+
+Three bugs caught before running anything, all of the same type. A hardcoded
+frequency=12 inside a function that takes frequency as a parameter, nra used as
+a name that did not exist, and revaluation accepted in the signature of
+deferred_liability but never passed through to deferred_epv. Two of those three
+would have run cleanly and returned a wrong number only once the stress module
+started moving assumptions. The pattern is an argument that exists but is not
+connected, and the check is to read the signature and confirm every parameter
+appears in the body.
+
+Added three tests, bringing the suite to ten. All pass in 1.16 seconds. The
+member count test asserts that the pensioner and non-pensioner arrays together
+cover all 1,000 members, taken from the array lengths rather than from the
+frame, because counting the frame tests pandas rather than the model. The
+second asserts that more non-pensioners are valued than there are rows with
+deferred status, which is what protects the D7 routing of actives. The third
+asserts the deferred EPV rises with age.
+
+Two predictions of mine were wrong today and both are worth recording.
+
+I predicted the deferred liability ratio would come in below the pensioner
+ratio of 11.266884722115922. It came in above, at 11.459287758206962. I had
+compared the deferreds against the annuity value at exactly 65 and concluded
+that twenty years of discounting must pull them below. That ignored the
+pensioners' actual mean age of 74.46, where the annuity is worth about 11 a
+pound rather than 15. The comparison that mattered was against the pensioner
+mean age, not against retirement age.
+
+I then estimated the mean deferred age at 55 to 57 by inverting the ratio. It
+is 54.380260. Backing an age out of a mean value overstates it whenever value
+is convex in age, which it is, because the members above the mean gain more
+than the members below it lose. Jensen's inequality, and a live example of it.
+
+The minimum non-pensioner age of 43.216975 matches the figure recorded under
+D20 on Day 9, which was derived from the raw dates of birth in a completely
+different context. Survival to 120 for that member on the female cohort basis
+is 1.6664415863804626e-08, about one in sixty million, which is the figure
+behind the terminal age paragraph in the report notes. 
