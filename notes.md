@@ -47,6 +47,8 @@ Conventions used in this file:
 | D23 | Mortality basis in the annuity factor | Day 10 |
 | D24 | Pension payment frequency, monthly in advance | Day 12 |
 | D25 | Pension increases at flat CPI 3.0 per cent | Day 12 |
+| D26 | Per-member loop rather than a masked matrix | Day 13 |
+| D27 | Shared constants imported rather than duplicated | Day 13 |
 
 ### Flags
 
@@ -74,11 +76,14 @@ Conventions used in this file:
 | F20 | Extrapolation dominates the long horizon | OPEN, Day 15 |
 | F21 | Monthly payment frequency not implemented | RESOLVED Day 12 |
 | F22 | No cohort survival function exists | RESOLVED Day 12 |
-| F23 | Payment grid assumes an integer age | OPEN, Day 13 |
+| F23 | Payment grid assumes an integer age | RESOLVED Day 13 for pensioners |
 | F24 | RuntimeWarning during curve_fit | DUPLICATE of F15, Day 12 |
 | F25 | Implied inflation term structure as a sensitivity | OPEN, Day 15 |
 | F26 | LPI cap applied to a central estimate | OPEN, limitations only |
 | F27 | Inflation raw file is the only copy | OPEN, Day 15 |
+| F28 | membership.py run section was unguarded | RESOLVED Day 13 |
+| F29 | annuity_factor defaults to the period basis | OPEN, Day 15 |
+| F30 | valuation.py imports membership.py | OPEN, Day 15 |
 
 ---
 
@@ -878,6 +883,43 @@ cumulative increase factor to time t is (1 + i(t))^t directly, with no
 bootstrapping to forward rates required. The objection to F10 is not that it is
 technically awkward.
 
+### D26: per-member loop rather than a masked matrix (Day 13, 10 August)
+
+Total pensioner liability is computed by looping over members in Python and
+calling pensioner_epv once each, with each call vectorised across that member's
+own payment dates.
+
+The alternative was a single rectangular grid sized for the youngest pensioner,
+661 monthly payments to age 120, with a boolean mask zeroing payments beyond each
+member's terminal age. That avoids the Python loop entirely at the cost of
+computing several hundred columns of discarded values for the average member, and
+at the cost of a mask that silently overstates liability if it is wrong.
+
+Chosen on measurement rather than instinct. 500 members take 0.0415 seconds,
+0.083 milliseconds each, so a full 1,000 member valuation after Day 14 is around
+0.083 seconds. The matrix version would be a rewrite of validated code to save
+eighty milliseconds. F11 means the dashboard re-runs the valuation on every slider
+move, but Streamlit caching handles repeat calls and this is already well inside
+interactive speed.
+
+Revisit only if a measured bottleneck appears, not on suspicion.
+
+### D27: shared constants imported rather than duplicated (Day 13, 10 August)
+
+VALUATION_DATE is defined once in src/membership.py and imported by
+src/valuation.py rather than declared twice. Two module level constants holding
+the same date stay in step until they do not, and a valuation date differing
+between modules would produce ages inconsistent with the dates of birth they came
+from.
+
+This required guarding the membership run section, see F28.
+
+It also creates a dependency running from the valuation engine to the synthetic
+data generator, which is backwards: a valuation should work on any membership
+frame. Recorded as F30 with a proposed fix scheduled for Day 15. Accepted today
+because the alternative was refactoring three working modules on a full day for no
+change in output.
+
 ---
 
 ## Flags
@@ -1049,6 +1091,13 @@ Raised Day 3. Status: OPEN, bites Day 13.
 CSV stores no type information. `date_of_birth` will arrive as text
 unless the file is read with `parse_dates=["date_of_birth"]`. Silent
 until date arithmetic fails somewhere unrelated.
+
+PARTIALLY RESOLVED (Day 13). Exercised for the first time. Reading members.csv
+without parse_dates raises TypeError inside exact_ages when the Timestamp
+subtraction meets a column of strings, so the failure is loud rather than silent
+as originally feared. It remains the caller's responsibility, since
+pensioner_liability takes an already loaded frame. Left open until the dashboard
+and the tests both load the file in one agreed place.
 
 ### F13: Independent random streams
 
@@ -1245,7 +1294,8 @@ give 0.07399580786141326. Test to be written Day 15.
 
 ### F23: Payment grid assumes an integer age
 
-Raised Day 10. Status: OPEN, now bites Day 13 rather than Day 14.
+Raised Day 10. Status: RESOLVED (Day 13) for pensioners. Deferreds to be checked
+on Day 14.
 
 annuity_factor builds its payment times with
 np.arange(0, UPPER_LIMITING_AGE - x + 1), which assumes x is a whole number.
@@ -1258,6 +1308,22 @@ monthly grid under D24 has to run from a pensioner's actual non-integer age.
 Two sub-questions to settle when it is fixed: whether the grid still terminates
 at age 120 exactly, and whether the final payment lands on or before the
 terminal age.
+
+RESOLVED (Day 13). payment_times(x, frequency, upper_age) built in
+src/valuation.py. The payment count is floor((upper_age - x) * frequency) + 1,
+which handles any real age, and the times are integer month indices divided once
+by frequency.
+
+Verified at five ages: 65.0 gives 661 payments ending at t = 55.0, 72.34 gives
+572 ending at 47.583333333333336, 84.5 gives 427, 99.8 gives 243, 100.0 gives
+241. In every case the first payment is exactly 0.0 and the age at the last
+payment does not exceed 120. Whole number ages land exactly on the terminal age
+because their runway is a whole number of months; fractional ages stop just short,
+which is correct rather than a rounding artefact.
+
+frequency = 1 reproduces the Day 10 annual grid of 56 elements ending at 55.0,
+which is an independent cross-check against already validated work.
+
 
 ### F24: RuntimeWarning during curve_fit
 
@@ -1327,6 +1393,67 @@ If it is lost or re-downloaded, F25 becomes impossible and D8's derivation
 becomes unverifiable by anyone including me. Do not delete data/raw.
 
 File confirmed present 8 August, 349,408 bytes, dated 29 July.
+
+### F28: membership.py run section was unguarded
+
+Raised Day 13. Status: RESOLVED (Day 13).
+
+The generation and write block at the foot of src/membership.py sat at module
+level, so importing anything from that file regenerated 1,000 members, rewrote
+data/processed/members.csv and printed seven diagnostic blocks.
+
+Found while implementing D27, which imports VALUATION_DATE from that module.
+
+Fixed by placing the build, assemble, save and check sections under
+if __name__ == "__main__". Constants and the seeded generator stay at module
+level, since creating a generator consumes nothing from the sequence and every
+draw_ call sits inside the guard.
+
+Verified two ways. Running the file directly still writes the file and prints as
+before, and git status afterwards shows members.csv unmodified, so the D9 seeding
+reproduces the scheme byte for byte. Importing the module now prints nothing.
+
+Would have surfaced on Days 19 to 20 as a regeneration and disk write on every
+Streamlit page load, on a platform where the filesystem is ephemeral.
+
+### F29: annuity_factor defaults to the period basis
+
+Raised Day 13. Status: OPEN, decision scheduled Day 15.
+
+D23 gave annuity_factor a survival_fn parameter defaulting to
+survival_probability, the period basis. Since Day 12 the valuation basis is
+cohort, so the default is now the exception rather than the rule. Any call that
+omits the argument silently returns a figure roughly 4 per cent too low, with no
+error raised.
+
+Same failure shape that D14 designed out by putting the base year offset inside
+improved_force_of_mortality rather than trusting the caller.
+
+Not changed on Day 13 because flipping the default breaks the Day 10 tests that
+call annuity_factor without the argument, and rewriting those is mortality.py and
+tests/ work rather than liability engine work. pensioner_epv was written with
+survival_probability_cohort as its default from the outset, so nothing built today
+carries the problem.
+
+Proposed resolution: flip the default and make every validation call state
+survival_probability explicitly. Breaking the tests is the point, since a test
+asserting a period figure should say so in its own body rather than inherit it
+from a default.
+
+### F30: valuation.py imports membership.py
+
+Raised Day 13. Status: OPEN, decision scheduled Day 15.
+
+D27 makes the valuation engine depend on the synthetic data generator, which
+inverts the intended direction. D21 explicitly valued keeping modules independent
+so each can be tested without the others.
+
+Proposed fix: a small src/config.py holding the constants that cross module
+boundaries, VALUATION_DATE, UPPER_LIMITING_AGE, CPI, LPI_CAP, LPI_FLOOR and
+IMPROVEMENT_RATE, with every module importing from it and none importing each
+other.
+
+Deferred because it touches three working modules for no change in output.
 
 ---
 
@@ -1410,6 +1537,10 @@ Accumulating for the report's limitations section, Days 22 to 23.
   tend to hold larger pensions.
 - Normal retirement age is 65 for every member, so the deferred population is
   uniform in a way a real scheme is not.
+- Exact ages are computed from whole days, since Timedelta.dt.days discards any
+  part day remainder. A member is therefore up to one day younger than their true
+  age. Consistent with D7's use of 365.25 days per year in the other direction,
+  and worth under three thousandths of a per cent of a single payment.
 
 ### Benefit structure
 
@@ -1426,6 +1557,9 @@ Accumulating for the report's limitations section, Days 22 to 23.
 - Spouse mortality is assumed independent of member mortality. Couples'
   mortality is correlated in practice, the widowhood effect being well
   documented, so this slightly understates the joint liability.
+- The pensioner liability recorded on Day 13 excludes the spouse's pension. The
+  D13 loading of roughly 12 per cent is applied on Day 15, so the Day 13 figure is
+  not the pensioner Technical Provisions.
 
 ### Basis and scope
 
@@ -1526,6 +1660,80 @@ is right when they do not.
 
 **Superseded (Day 12).** These figures are on the period basis. The cohort
 equivalents are recorded in the Day 12 log entry. The validation itself stands.
+
+### Day 13 decision gate (10 August): pensioner liability. PASSED.
+
+Total pensioner liability 51480005.7698302, against total pensioner pension in
+payment of 4569142.85. Cohort mortality basis (D23), monthly in advance (D24),
+LPI at flat CPI 3.0 per cent (D25), gilt curve at the valuation date, before the
+spouse loading.
+
+Ratio of liability to pension in payment is 11.266884722115922, a pension
+weighted average annuity factor. This must sit below 15.069777434175714, the
+monthly with increases EPV per pound for a male aged exactly 65, because every
+pensioner is older than that. Mean pensioner age is 74.45756057494867.
+
+Reconciliation against single member work. The youngest male is aged
+65.07597535934292 and returns 15.032912 per pound, against 15.069777434175714
+computed independently at exactly 65.0. The gap implies 0.4852288227992443 per
+year of age, or 3.219875663905588 per cent, which is the right order for an
+annuity at that age. The whole population path and the single member path agree
+at the one point where they overlap.
+
+EPV per pound by sex and age:
+
+  M  324 members, youngest 65.0760 at 15.032912, oldest 95.2416 at 2.521870
+  F  176 members, youngest 65.2813 at 16.391052, oldest 95.3128 at 2.880782
+
+Monotonically decreasing with age within each sex, allowing ties. Six tied pairs
+arise from members sharing a date of birth, five male and one female, with
+differences of exactly zero or of order 1e-15. Ties are near certain rather than
+surprising: across 11,044 possible dates of birth in the pensioner age range, the
+probability of at least one shared date is 0.991243484804045 among 324 males and
+0.7520237517916077 among 176 females.
+
+Mean EPV per pound is 10.48669025897467 male and 11.78026746520839 female, a
+ratio of 1.1233541922463721. Checkpoint 2's age 65 gilt curve factors imply about
+1.075; the figure here is higher because the two sexes have different age
+distributions, so they are not directly comparable.
+
+Concentration. The largest single member EPV is 1080655.1352335217, being
+2.0991744640923068 per cent of the total. The ten largest together are
+14.657452877827176 per cent. Consistent with the lognormal pension draw in D7.
+
+Runtime 0.0415 seconds for 500 members. See D26.
+
+### D24 validation (Day 13): the 11/24 approximation
+
+Male aged 65, gilt curve, cohort basis, no increases.
+
+  annual in advance    12.037432488233684
+  monthly in advance   11.574695632191498
+  exact adjustment      0.46273685604218606
+  11/24 approximation   0.4583333333333333
+  residual             -0.004403522708852747
+
+The approximation understates the true cost of paying monthly by
+0.9607685910224176 per cent of the adjustment itself, or 0.03658190991440318 per
+cent of the annuity. Direction as predicted in D24: the approximation assumes a
+delay of 11/24 years costs exactly 11/24, ignoring that discounting is exponential
+rather than linear and that survival falls across the delay. Both omissions make
+the true cost slightly larger than the linear estimate.
+
+Two independent routes agreeing to within a thousandth of a per cent of the
+liability, with the residual explained rather than absorbed.
+
+With increases the frequency adjustment is larger, 4.212845828806289 per cent
+against 3.8441491281010376 per cent without. Increases push value into later
+payments and later payments are where the timing shift bites hardest, so the two
+interact rather than adding independently. This is why D24 required modelling
+monthly directly rather than subtracting 11/24 from a figure computed on a
+different basis.
+
+Increase uplift at age 65: 30.69702536791967 per cent annual,
+30.195885170956103 per cent monthly. CPI at 3.0 per cent against a gilt curve
+near 5.5 per cent leaves a real discount rate near 2.5 per cent, worth close to a
+third of the liability over a 65 year old's horizon.
 
 ---
 
@@ -1704,3 +1912,45 @@ rewritten, only reorganised, except where a flag number collision or a
 superseded scheduling reference made the original misleading.
 
 Created report/notes_for_report.md and began collecting report material.
+
+### Day 13, Monday 10 August
+
+Built the pensioner liability engine in src/valuation.py: payment_times,
+pension_amounts, pensioner_epv, exact_ages and pensioner_liability. Cleared the
+Monday decision gate with a total pensioner liability of 51480005.7698302. See the
+Checkpoints section.
+
+Created report/notes_for_report.md and seeded it with material from Days 8 to 12,
+organised by report section rather than by date.
+
+Three gotchas worth recording.
+
+np.arange with a fractional step accumulates error and its stopping rule becomes
+unpredictable. np.arange(0, 55.0, 1/12) returns 660 elements ending at
+54.916666666666664, where the correct grid has 661 ending at exactly 55.0. One
+payment silently missing at the terminal age. Building integer month indices and
+dividing once avoids it, because each value is a single division rather than an
+accumulation. Across the range where both agree the largest discrepancy is
+7.105427357601002e-15.
+
+An exact whole number age is reachable and is not evidence of a data problem.
+Ages are integer days divided by 365.25, and 365.25 * 4 = 1461 exactly, so ages
+that are multiples of four years land on whole numbers. Across the pensioner range
+the probability for a given member is 0.0007065265389031175, giving an expected
+0.3532632694515588 across 500 members and a 0.2976954402207945 chance of at least
+one. An assertion that no age is whole would fail on correct data roughly three
+times in ten.
+
+pandas 3.0.2 read_csv with parse_dates returns datetime64[us], not
+datetime64[ns]. The column built in memory by membership.py is nanosecond, because
+it comes from to_timedelta arithmetic. Both are genuine datetimes and nothing
+downstream depends on the resolution, but a dtype check must use
+pd.api.types.is_datetime64_any_dtype rather than comparing against a literal.
+
+Membership figures for the report: 500 pensioners, mean age 74.45756057494867,
+minimum 65.07597535934292, maximum 95.31279945242984, split 324 male and 176
+female, a male proportion of 0.648 against the 0.65 parameter in D7. Total
+pensioner pension in payment 4569142.85.
+
+Settled D26 and D27. Resolved F23 for pensioners and F28. Partially resolved F12.
+Opened F29 and F30.

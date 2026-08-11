@@ -161,80 +161,80 @@ def draw_sexes(n, rng, proportion_male):
     """
     return rng.choice(["M", "F"], size=n, p=[proportion_male, 1 - proportion_male])
 
-
-# --- build the scheme ---
-# All draws happen here, in this order. Order matters: the seeded generator
-# produces one sequence, so reordering these calls changes the scheme (D9).
-
-# Pensioners
-ages_p = draw_ages(N_PENSIONERS, rng,
-                   mean=MEAN_AGE_PENSIONERS, sd=SD_AGE_PENSIONERS,
-                   low=MIN_AGE_PENSIONERS, high=MAX_AGE_PENSIONERS)
-sexes_p = draw_sexes(N_PENSIONERS, rng, PROP_MALE_PENSIONERS)
-pensions_p = draw_pension_amounts(N_PENSIONERS, rng,
-                                  MEDIAN_PENSIONS_PENSIONERS, SIGMA_PENSIONS_PENSIONERS)
-dobs_p = ages_to_dates_of_birth(ages_p, VALUATION_DATE)
-
-# Deferreds
-ages_d = draw_ages(N_DEFERREDS, rng,
-                   mean=MEAN_AGE_DEFERREDS, sd=SD_AGE_DEFERREDS,
-                   low=MIN_AGE_DEFERREDS, high=MAX_AGE_DEFERREDS)
-sexes_d = draw_sexes(N_DEFERREDS, rng, PROP_MALE_DEFERREDS)
-pensions_d = draw_pension_amounts(N_DEFERREDS, rng,
-                                  MEDIAN_PENSIONS_DEFERREDS, SIGMA_PENSIONS_DEFERREDS)
-dobs_d = ages_to_dates_of_birth(ages_d, VALUATION_DATE)
-
-# Actives
-ages_a = draw_ages(N_ACTIVES, rng,
-                   mean=MEAN_AGE_ACTIVES, sd=SD_AGE_ACTIVES,
-                   low=MIN_AGE_ACTIVES, high=MAX_AGE_ACTIVES)
-sexes_a = draw_sexes(N_ACTIVES, rng, PROP_MALE_ACTIVES)
-pensions_a = draw_pension_amounts(N_ACTIVES, rng,
-                                  MEDIAN_PENSIONS_ACTIVES, SIGMA_PENSIONS_ACTIVES)
-dobs_a = ages_to_dates_of_birth(ages_a, VALUATION_DATE)
-
-# --- assemble ---
-
-pensioners = pd.DataFrame({
-    "status": "pensioner",
-    "sex": sexes_p,
-    "date_of_birth": dobs_p,
-    "annual_pension": pensions_p,
-    "normal_retirement_age": NORMAL_RETIREMENT_AGE,
-})
-
-deferreds = pd.DataFrame({
-    "status": "deferred",
-    "sex": sexes_d,
-    "date_of_birth": dobs_d,
-    "annual_pension": pensions_d,
-    "normal_retirement_age": NORMAL_RETIREMENT_AGE,
-})
-
-actives = pd.DataFrame({
-    "status": "active",
-    "sex": sexes_a,
-    "date_of_birth": dobs_a,
-    "annual_pension": pensions_a,
-    "normal_retirement_age": NORMAL_RETIREMENT_AGE,
-})
-
-members = pd.concat([pensioners, deferreds, actives], ignore_index=True)
-members.insert(0, "member_id", [f"M{i:04d}" for i in range(1, len(members) + 1)])
-
-# --- storage tidy-ups (presentation, not modelling) ---
-members["date_of_birth"] = members["date_of_birth"].dt.normalize()
-members["annual_pension"] = members["annual_pension"].round(2)
-
-# --- save ---
-OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-members.to_csv(OUT_PATH, index=False)
-print(f"Wrote {len(members)} members to {OUT_PATH}")
-
-# --- checks ---
-print(members.shape)
-print(members["status"].value_counts())
-print(members.head())
-print(members.dtypes)
-print(members.groupby("status")["annual_pension"].agg(["count", "sum", "mean"]))
-print("Total annual pension:", members["annual_pension"].sum())
+if __name__ == "__main__":
+    # --- build the scheme ---
+    # All draws happen here, in this order. Order matters: the seeded generator
+    # produces one sequence, so reordering these calls changes the scheme (D9).
+    
+    # Pensioners
+    ages_p = draw_ages(N_PENSIONERS, rng,
+                       mean=MEAN_AGE_PENSIONERS, sd=SD_AGE_PENSIONERS,
+                       low=MIN_AGE_PENSIONERS, high=MAX_AGE_PENSIONERS)
+    sexes_p = draw_sexes(N_PENSIONERS, rng, PROP_MALE_PENSIONERS)
+    pensions_p = draw_pension_amounts(N_PENSIONERS, rng,
+                                      MEDIAN_PENSIONS_PENSIONERS, SIGMA_PENSIONS_PENSIONERS)
+    dobs_p = ages_to_dates_of_birth(ages_p, VALUATION_DATE)
+    
+    # Deferreds
+    ages_d = draw_ages(N_DEFERREDS, rng,
+                       mean=MEAN_AGE_DEFERREDS, sd=SD_AGE_DEFERREDS,
+                       low=MIN_AGE_DEFERREDS, high=MAX_AGE_DEFERREDS)
+    sexes_d = draw_sexes(N_DEFERREDS, rng, PROP_MALE_DEFERREDS)
+    pensions_d = draw_pension_amounts(N_DEFERREDS, rng,
+                                      MEDIAN_PENSIONS_DEFERREDS, SIGMA_PENSIONS_DEFERREDS)
+    dobs_d = ages_to_dates_of_birth(ages_d, VALUATION_DATE)
+    
+    # Actives
+    ages_a = draw_ages(N_ACTIVES, rng,
+                       mean=MEAN_AGE_ACTIVES, sd=SD_AGE_ACTIVES,
+                       low=MIN_AGE_ACTIVES, high=MAX_AGE_ACTIVES)
+    sexes_a = draw_sexes(N_ACTIVES, rng, PROP_MALE_ACTIVES)
+    pensions_a = draw_pension_amounts(N_ACTIVES, rng,
+                                      MEDIAN_PENSIONS_ACTIVES, SIGMA_PENSIONS_ACTIVES)
+    dobs_a = ages_to_dates_of_birth(ages_a, VALUATION_DATE)
+    
+    # --- assemble ---
+    
+    pensioners = pd.DataFrame({
+        "status": "pensioner",
+        "sex": sexes_p,
+        "date_of_birth": dobs_p,
+        "annual_pension": pensions_p,
+        "normal_retirement_age": NORMAL_RETIREMENT_AGE,
+    })
+    
+    deferreds = pd.DataFrame({
+        "status": "deferred",
+        "sex": sexes_d,
+        "date_of_birth": dobs_d,
+        "annual_pension": pensions_d,
+        "normal_retirement_age": NORMAL_RETIREMENT_AGE,
+    })
+    
+    actives = pd.DataFrame({
+        "status": "active",
+        "sex": sexes_a,
+        "date_of_birth": dobs_a,
+        "annual_pension": pensions_a,
+        "normal_retirement_age": NORMAL_RETIREMENT_AGE,
+    })
+    
+    members = pd.concat([pensioners, deferreds, actives], ignore_index=True)
+    members.insert(0, "member_id", [f"M{i:04d}" for i in range(1, len(members) + 1)])
+    
+    # --- storage tidy-ups (presentation, not modelling) ---
+    members["date_of_birth"] = members["date_of_birth"].dt.normalize()
+    members["annual_pension"] = members["annual_pension"].round(2)
+    
+    # --- save ---
+    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    members.to_csv(OUT_PATH, index=False)
+    print(f"Wrote {len(members)} members to {OUT_PATH}")
+    
+    # --- checks ---
+    print(members.shape)
+    print(members["status"].value_counts())
+    print(members.head())
+    print(members.dtypes)
+    print(members.groupby("status")["annual_pension"].agg(["count", "sum", "mean"]))
+    print("Total annual pension:", members["annual_pension"].sum())
