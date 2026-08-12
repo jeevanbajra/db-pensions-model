@@ -20,6 +20,16 @@ CPI = 0.03 #D25
 LPI_CAP = 0.05 #D7
 LPI_FLOOR = 0.0 #D7
 REVALUATION_RATE = 0.03
+SPOUSE_PROPORTION = 0.5
+SPOUSE_AGE_DIFFERENCE = 3.0
+PROPORTION_MARRIED = {"M": 0.80, "F": 0.70}
+OPPOSITE_SEX = {"M": "F", "F": "M"}
+
+# Chosen input, not a valuation output. The scheme is synthetic, so the asset
+# value is set as a proportion of the liability rather than the other way
+# round. Stated at 92.5 per cent to give a deficit that is material but
+# recoverable.
+INITIAL_FUNDING_LEVEL = 0.925
 
 def payment_times(x, frequency=12, upper_age=UPPER_LIMITING_AGE):
     """
@@ -202,3 +212,167 @@ def deferred_liability(members, params, curve, frequency=12, cpi=CPI,
     def_member_epvs = np.array(epvs_non_pensioners)
     def_liability = def_member_epvs.sum()
     return def_liability, def_member_epvs
+
+
+def spouse_epv(x, sex, pension, params, curve, nra=NORMAL_RETIREMENT_AGE,
+               deferred=False, frequency=12, cpi=CPI,
+               revaluation=REVALUATION_RATE, proportion=SPOUSE_PROPORTION,
+               age_difference=SPOUSE_AGE_DIFFERENCE,
+               proportion_married=PROPORTION_MARRIED,
+               survival_fn=survival_probability_cohort):
+    """
+    Expected present value of the spouse's pension for one member.
+
+    On the member's death, a proportion of their pension continues to their
+    surviving spouse for the rest of the spouse's life. This function values
+    that benefit. The member's own pension is valued separately by
+    pensioner_epv or deferred_epv.
+
+    A payment is made at time t only if the spouse is alive at t and the
+    member has died by t. Assuming the two lives are independent, the
+    probability of that is the spouse's survival probability multiplied by
+    the member's probability of death. For a member not yet in payment, D7
+    gives no benefit on death before retirement, so the member must have
+    survived to retirement first and the death probability is n_p_x - t_p_x
+    rather than 1 - t_p_x. Setting n to zero for a pensioner makes the same
+    expression cover both cases.
+
+    Independence is not true in practice. Spouses share a household, an
+    income and a lifestyle, and bereavement itself raises mortality, so
+    couples die closer together than independence implies. That means the
+    periods where one is alive and the other dead are shorter than modelled,
+    so this calculation overstates the cost of the benefit. The direction of
+    the error is conservative, which is the direction to be wrong in.
+
+    The spouse's pension is the member's pension amounts scaled by
+    proportion. This works because the spouse's pension inherits the
+    member's increase history rather than starting afresh at the date of
+    death, so the two tracks never diverge and one array serves both.
+
+    Parameters:
+    x : member's exact age at the valuation date.
+    sex : "M" or "F", the member's sex. The spouse is assumed to be of the
+        opposite sex, and is assumed alive at the valuation date.
+    pension : the member's own annual pension at the valuation date. The
+        spouse's share is applied inside this function.
+    params : dict keyed on "M" and "F", each holding an (A, B, C) tuple of
+        fitted Gompertz-Makeham parameters. Both sets are used, one for the
+        member and one for the spouse.
+    curve : gilt curve frame as returned by discounting.load_curve.
+    nra : normal retirement age, used only when deferred is True.
+    deferred : True for any member not yet in payment. Actives are passed as
+        True alongside deferreds, since D7 makes them financially identical.
+    frequency : payments per year, monthly under D24.
+    cpi : in-payment increase assumption, D25.
+    revaluation : pre-retirement revaluation assumption, D28.
+    proportion : share of the member's pension continuing to the spouse.
+    age_difference : assumed age gap, husband older.
+    proportion_married : dict keyed on the member's sex, giving the assumed
+        proportion of members with a surviving spouse. Applied as a straight
+        multiplier at the end, so the sensitivity to it is proportional.
+    survival_fn : mortality basis, defaulting to the cohort basis under D23.
+
+    Returns:
+    float, the EPV of the spouse's pension in pounds.
+
+    Raises ValueError if deferred is True but the member is already at or past NRA.
+    """
+    spouse_sex = OPPOSITE_SEX[sex]
+    spouse_age = x - age_difference if sex == "M" else x + age_difference
+    A_mem, B_mem, C_mem = params[sex]
+    A_sp, B_sp, C_sp = params[spouse_sex]
+    if deferred:
+        n = nra - x
+        if n <= 0:
+            raise ValueError(f"spouse_epv called with deferred=True at age {x}, NRA {nra}")
+        t_ret = payment_times(nra, frequency=frequency)
+        t_val = t_ret + n
+    else:
+        n = 0.0
+        t_ret = payment_times(x, frequency=frequency)
+        t_val = t_ret
+    pension_at_start = pension * (1 + revaluation) ** n
+    member_amounts = pension_amounts(pension_at_start, t_ret, cpi=cpi)
+    spouse_amounts = member_amounts * proportion
+    spouse_survival = survival_fn(spouse_age, t_val, A_sp, B_sp, C_sp)
+    member_survival = survival_fn(x, t_val, A_mem, B_mem, C_mem)
+    survival_to_start = survival_fn(x, n, A_mem, B_mem, C_mem)
+    weight = spouse_survival * (survival_to_start - member_survival)
+    discount = discount_factor(t_val, curve)
+    pay = (spouse_amounts * weight * discount) / frequency
+    sp_epv = pay.sum() * proportion_married[sex]
+    return sp_epv
+
+
+def spouse_liability(members, params, curve, frequency=12, cpi=CPI,
+                     revaluation=REVALUATION_RATE,
+                     survival_fn=survival_probability_cohort):
+    """
+    Total expected present value of spouses' pensions across the whole scheme.
+
+    Every member is included, in payment or not, since every member is
+    assumed to have a spouse's pension attached to their benefit. There is
+    no filter on this frame, unlike pensioner_liability and
+    deferred_liability which split the membership between them.
+
+    The deferred flag passed to spouse_epv is set per member as
+    status != "pensioner". Actives are therefore treated as deferreds, per
+    D7, which is the same routing used for their own pensions.
+
+    Parameters:
+    members : DataFrame as written by membership.py.
+    params : dict keyed on "M" and "F", each holding an (A, B, C) tuple.
+        Both sets are used for every member, one for the member and one for
+        the spouse.
+    curve : gilt curve frame as returned by discounting.load_curve.
+    frequency : payments per year, monthly under D24.
+    cpi : in-payment increase assumption, D25.
+    revaluation : pre-retirement revaluation assumption, D28.
+    survival_fn : mortality basis, defaulting to the cohort basis under D23.
+
+    The spouse proportion, age difference and proportion married are left on
+    the defaults set in spouse_epv.
+
+    Returns:
+    total : float, the liability in pounds.
+    per_member : array of individual EPVs in the order the members were
+        valued, one per member of the scheme.
+    """
+    all_members = members.copy()
+    all_members["age"] = exact_ages(all_members)
+    all_epvs = []
+    for row in all_members.itertuples():
+        indiv_epv = spouse_epv(
+            row.age, row.sex, row.annual_pension, params, curve,
+            nra=row.normal_retirement_age,
+            deferred=row.status != "pensioner",
+            frequency=frequency, cpi=cpi, revaluation=revaluation,
+            survival_fn=survival_fn,
+        )
+        all_epvs.append(indiv_epv)
+    all_member_epvs = np.array(all_epvs)
+    total_liability = all_member_epvs.sum()
+    return total_liability, all_member_epvs
+
+
+def funding_position(total_liability, assets):
+    """
+    Funding ratio and deficit for a given liability and asset value.
+    Funding ratio is asset diveded by liability. Deficit is liability - assets
+    which is positive if the scheme is underfunded.
+
+    In this case, assets are not derived, they are passed in and fixed.
+    Deriving assets inside the function would mean the ratio would stay constant
+    and stress test would have no impact on the funding position.
+
+    Parameters:
+    total_liability: total scheme liability in pounds.
+    assets: market value of schemes assets in pounds.
+
+    Returns: 
+    funding ratio: float, assets divided by liability
+    deficit: float, assets less liability. 
+    """
+    funding_ratio = assets / total_liability
+    deficit = total_liability - assets
+    return funding_ratio, deficit
