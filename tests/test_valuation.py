@@ -8,7 +8,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "src"))
 
-from mortality import survival_probability
+from mortality import survival_probability, load_gm_parameters
 from valuation import (annuity_factor, deferred_epv, deferred_liability,
                        pensioner_epv, pensioner_liability)
 from discounting import load_curve
@@ -16,15 +16,7 @@ from discounting import load_curve
 
 A, B, C = 0.002, 5e-06, 1.12
 
-# Fixed test basis. These are the fitted male Gompertz-Makeham parameters,
-# frozen as literals so the suite does not depend on data/raw, which is
-# gitignored under D4. Deliberately used for both sexes: none of these tests
-# is about the mortality fit. Not the live parameters, see F17.
-
-TEST_PARAMS = {
-    "M": (0.002180882981459045, 5.643224210947216e-06, 1.1215211478841929),
-    "F": (0.002180882981459045, 5.643224210947216e-06, 1.1215211478841929),
-}
+TEST_PARAMS, _ = load_gm_parameters()
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "processed"
 
