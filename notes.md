@@ -53,6 +53,14 @@ Conventions used in this file:
 | D29 | Deferred period measured exactly | Day 14 |
 | D30 | Deferred payment grid built at retirement age and shifted | Day 14 |
 | D31 | Per-member loop for deferred liability | Day 14 |
+| D32 | Spouse pensions modelled per member | Day 15 |
+| D33 | Spouse benefit assumptions | Day 15 |
+| D34 | Member and spouse lives assumed independent | Day 15 |
+| D35 | Asset value set as a proportion of the liability | Day 15 |
+| D36 | Stresses applied through existing parameters | Day 16 |
+| D37 | Interest rate stress applied to both rate columns | Day 16 |
+| D38 | Mortality level stress by scaling A and B | Day 16 |
+| D39 | Duration measured numerically | Day 16 |
 
 ### Flags
 
@@ -74,7 +82,7 @@ Conventions used in this file:
 | F14 | Spyder kernel will not start | OPEN, workaround in place |
 | F15 | Log-scale objective undefined for negative mu | OPEN, no action |
 | F16 | Gilt source file is a rolling download | RESOLVED Day 8 |
-| F17 | Fitted GM parameters not committed | OPEN, Day 15 |
+| F17 | Fitted GM parameters not committed | RESOLVED DAY 16 |
 | F18 | 40-year forward sits well below the 40-year spot | OPEN, Day 15 |
 | F19 | pandas.read_csv float precision | RESOLVED Day 8 |
 | F20 | Extrapolation dominates the long horizon | OPEN, Day 15 |
@@ -88,7 +96,8 @@ Conventions used in this file:
 | F28 | membership.py run section was unguarded | RESOLVED Day 13 |
 | F29 | annuity_factor defaults to the period basis | OPEN, Day 15 |
 | F30 | valuation.py imports membership.py | OPEN, Day 15 |
-| F31 | Test suite uses a hardcoded mortality basis | OPEN, Day 15 |
+| F31 | Test suite uses a hardcoded mortality basis | RESOLVED Day 16 |
+| F32 | Survival_probability_cohort returns nan at improvement = 0 | OPEN |
 
 ---
 
@@ -925,6 +934,144 @@ frame. Recorded as F30 with a proposed fix scheduled for Day 15. Accepted today
 because the alternative was refactoring three working modules on a full day for no
 change in output.
 
+### D32: spouse pensions modelled per member (Day 15, 12 August)
+
+The spouse's pension is calculated for each member from their own age and
+sex, rather than applied as a single flat percentage loading on the total
+liability.
+
+The flat loading would have been about twenty minutes of work against
+seventy five, and every component needed for the per member calculation was
+already built. The flat version would also have hidden the result that makes
+this worth reporting: the benefit costs roughly three times as much for a
+male member as for a female one, so a scheme level percentage is a weighted
+average of two very different numbers.
+
+### D33: spouse benefit assumptions (Day 15, 12 August)
+
+Fifty per cent of the member's pension continues to a surviving spouse. The
+spouse is assumed to be of the opposite sex and three years younger for a
+male member, three years older for a female member, husband older either
+way. Eighty per cent of male members and seventy per cent of female members
+are assumed to have a surviving spouse.
+
+Fifty per cent and the three year age gap are long standing conventions in
+UK scheme valuations. The married proportions are chosen assumptions in the
+range used in practice rather than figures derived from data, and are
+disclosed as such. A real valuation would set them from the scheme's own
+experience or from a standard table.
+
+The proportion married enters as a straight multiplier at the end of the
+calculation, so sensitivity to it is exactly proportional. Moving the male
+figure from 80 to 75 per cent reduces the male spouse liability by 6.25 per
+cent and changes nothing else.
+
+The asymmetry between the sexes is not arbitrary. A female member's spouse
+is on average older and male, so is less likely to be alive at her death.
+
+### D34: member and spouse lives assumed independent (Day 15, 12 August)
+
+The probability of a payment to the spouse is the product of the spouse's
+survival probability and the member's probability of having died. This
+assumes the two lives are independent.
+
+They are not. Spouses share a household, an income and a lifestyle, they
+were similar to begin with, and bereavement itself raises mortality, so
+couples die closer together than independence implies. Under positive
+dependence the periods where one is alive and the other dead are shorter, so
+the true cost of the benefit is lower than modelled.
+
+Independence therefore overstates the liability, which is the conservative
+direction. Modelling the dependence properly would need a copula or a joint
+life table and is out of scope. Recorded in Limitations.
+
+### D35: asset value set as a proportion of the liability (Day 15, 12 August)
+
+Assets are set at 92.5 per cent of the central liability, giving
+94,317,503.07 against a liability of 101,964,868.19 and a deficit of
+7,647,365.11.
+
+The scheme is synthetic and has no investments, so the asset figure has to
+be chosen. It is set through a funding level rather than as a pound amount
+so that it stays coherent if the liability changes. 92.5 per cent was chosen
+over 90 or 95 because a round number reads as arbitrary, and because a
+deficit of roughly 7.6 million against an annual pension roll of 8.1 million
+is a scheme with a real but recoverable shortfall, which is the interesting
+case to discuss.
+
+Once set, assets are a fixed amount in pounds. funding_position takes them
+as an argument and does not derive them. Deriving them inside the function
+would hold the funding ratio at 92.5 per cent under every stress and make
+each stress appear to have no effect on the funding position.
+
+### D36: stresses applied through existing parameters (Day 16, 13 August)
+
+No valuation function is modified to run a stress. The three things a stress
+can change are already parameters of the functions underneath: the gilt
+curve, the mortality parameters, and the survival function. stressed_liability
+builds stressed versions of those three and passes them down.
+
+This is a consequence of threading the basis through as arguments rather
+than reading module constants inside the valuation functions. The
+alternative design would require editing valuation.py to run a stress and
+remembering to edit it back.
+
+The improvement rate is reached with functools.partial, which returns a new
+function with the improvement keyword already fixed. Passing that as
+survival_fn changes behaviour at the innermost call without any function in
+between needing to know about it.
+
+### D37: interest rate stress applied to both rate columns (Day 16, 13 August)
+
+A parallel shift adds the same amount to the spot rate column and the
+forward rate column.
+
+spot_rate interpolates on the spot column up to 40 years and extrapolates
+above it using the 40 year forward. Shifting only the spot column would
+leave the extrapolated region unmoved, and under D20 that region is 47.9 per
+cent of the discount horizon for the youngest member. The stress would then
+apply where it is cheap and not where it is expensive.
+
+Shifting both gives a true parallel shift. The extrapolation is
+y(t) = (y(40)*40 + f(40)*(t-40)) / t, so adding d to both y(40) and f(40)
+adds d*t to the numerator and y(t) gains exactly d. Confirmed numerically at
+50 years, which lies in the extrapolated region: the spot moves from
+0.051186459537736664 to 0.041186459537736664 under a shift of -0.01.
+
+### D38: mortality level stress by scaling A and B (Day 16, 13 August)
+
+A mortality multiplier scales the force of mortality at every age. Since
+mu = A + B * C^x, multiplying A and B by the factor multiplies mu by that
+factor exactly. C is the rate at which mortality accelerates with age and is
+left unchanged, because a level stress should not alter the shape of the
+curve.
+
+Survival is exp(-integral of mu), so multiplying mu by k raises every
+survival probability to the power k. Verified: 20_p_65 on the male cohort
+basis is 0.5200257571363222, and under a multiplier of 1.10 the model
+returns 0.4871103309758665, which is the base raised to the power 1.10 to
+the last bit.
+
+### D39: duration measured numerically (Day 16, 13 August)
+
+Liability duration is computed as an effective duration by central
+difference, bumping the curve up and down by one basis point and measuring
+the proportional response:
+
+  duration = -(L(+h) - L(-h)) / (2 * h * L(0))
+
+The alternative is the present value weighted mean payment time, which is
+exact but needs the individual cashflows, and the liability functions return
+totals rather than cashflow arrays.
+
+The numerical route makes no assumption about the shape of the cashflows and
+automatically picks up the D19 extrapolation behaviour above 40 years, which
+an analytic formula on the published curve would have to handle separately.
+
+One basis point is the conventional bump. The 100 basis point moves in the
+stress table give responses of +16.188037 and -12.959891 per cent, and the
+gap between them is convexity rather than duration.
+
 ---
 
 ## Flags
@@ -1191,6 +1338,14 @@ with the valuation reading that rather than re-fitting.
 
 This is not housekeeping. Without it the dashboard cannot deploy at all (F11),
 so it is a hard gate on Day 15 rather than a tidy-up.
+
+RESOLVED (Day 16): extract_gm_parameters writes the six fitted parameters
+and their standard errors to data/processed/gm_parameters.csv, which is
+committed. load_gm_parameters reads it back with float_precision="round_trip"
+per F19, and the reloaded parameters compare equal to the fitted ones
+exactly. No fallback to re-fitting: a missing file fails loudly, because a
+silent fallback would work locally and break in deployment, which is the
+failure this pair of functions exists to prevent.
 
 ### F18: 40-year forward sits well below the 40-year spot
 
@@ -1474,6 +1629,29 @@ at which point these tests should read the committed file. Scheduled Day 15.
 
 Note that tests/test_mortality.py still re-fits from data/raw, so the suite as a
 whole is not yet clone-and-run.
+
+RESOLVED (Day 16): tests/test_valuation.py now calls load_gm_parameters
+rather than holding literal parameters. Ten tests pass in 1.15 seconds. Note
+that tests/test_mortality.py still re-fits from data/raw, so the suite as a
+whole is still not clone-and-run.
+
+### F32: survival_probability_cohort returns nan at improvement = 0 (Day 16, 13 August)
+
+The closed form contains A / log(1 - improvement). At improvement = 0 that
+is a division by zero, and the whole result becomes nan rather than raising.
+
+The expression has a perfectly good limit at that point: as the improvement
+rate approaches zero both the numerator and the denominator approach zero
+and the ratio tends to A * t, which is the correct period basis term. The
+code evaluates it directly rather than taking the limit.
+
+Worked around by using an improvement rate of 1e-10, which is economically
+zero. Checked against the exact period formula at age 65 over 20 years:
+exact 0.44876302444756944 against 0.44876302501626564, a relative error of
+1.2672527471835338e-09.
+
+Proper fix is a guard raising ValueError and pointing at
+survival_probability for the period basis. Not yet implemented.
 
 ---
 
@@ -2060,3 +2238,111 @@ D20 on Day 9, which was derived from the raw dates of birth in a completely
 different context. Survival to 120 for that member on the female cohort basis
 is 1.6664415863804626e-08, about one in sixty million, which is the figure
 behind the terminal age paragraph in the report notes. 
+
+## Day 15, Wednesday 12 August
+
+Spouses' pensions, assets and the funding position. valuation.py is complete.
+55.5 per cent, on target, finished before 11am against a hard stop.
+
+Derived the spouse's pension from first principles. A payment is made at time
+t if the spouse is alive and the member has died, which under independence is
+the product of the two probabilities. For a member not yet in payment, D7
+gives no benefit on death before retirement, so the member must reach
+retirement first and the probability is n_p_x - t_p_x rather than 1 - t_p_x.
+Setting n to zero for a pensioner makes one expression cover both.
+
+The spouse's pension amounts are the member's amounts scaled by 50 per cent,
+because the spouse's pension inherits the member's increase history rather
+than starting afresh at the date of death.
+
+Settled D32 to D35. Built spouse_epv, spouse_liability, total_liability and
+funding_position.
+
+The payment probability, before any amounts or discounting. For a male aged
+65 with a spouse aged 62 it peaks at 0.37931174003221896 at 24.25 years. For
+a female aged 65 with a spouse aged 68 it peaks at 0.15014859252558868 at
+19.333333333333332 years. Summed across the whole grid the male figure is
+2.8857599774379086 times the female one.
+
+Spouse EPVs per pound of pension: male aged 65, 1.8985862675319678; female
+aged 65, 0.6495149759366112; deferred male aged 45, 1.073163625672042. As
+loadings on the member's own pension that is 12.598635088175186 per cent,
+3.9626192140480745 per cent and 12.781460303726245 per cent. The male to
+female ratio is 2.923083127982038, close to the 2.89 in the raw
+probabilities before any pension amounts or discounting entered.
+
+Total spouse liability 9,677,671.55, a blended loading of 10.486472558668329
+per cent on the member liability of 92,287,196.64. Total scheme liability
+101,964,868.19. Assets 94,317,503.07, funding ratio 92.5 per cent, deficit
+7,647,365.11.
+
+Caught a bug in funding_position that would have been invisible until the
+stress tests. The function recomputed assets from the liability using
+INITIAL_FUNDING_LEVEL rather than using the assets it was given, so it would
+have returned 92.5 per cent under every stress. Assets are a fixed amount in
+pounds; only the liability moves.
+
+## Day 16, Thursday 13 August
+
+Reproducibility, then stresses and duration. The Day 17 gate, a complete
+model with stresses and duration, was cleared a day early.
+
+56.0 to roughly 64.5 per cent. All five source modules are now at 100 per
+cent and nothing remains to be modelled. What is left is the test suite, the
+dashboard, the report, the README and the dry run.
+
+Closed F17. extract_gm_parameters fits both sexes and writes the six
+parameters and their standard errors to a committed CSV; load_gm_parameters
+reads it back. The round trip is exact, which is F19 doing its job. Then
+closed F31 by pointing the tests at the committed file rather than at
+hardcoded literals. Ten tests pass.
+
+Fit quality, male, standard error as a percentage of the parameter it
+measures: A 4.4626232139648465, B 6.21337827265144, C 0.07206991393116932.
+The ageing parameter is pinned down far more tightly than the other two,
+which is what should happen: C is the dominant feature of the data across
+the whole fit range, while A and B mainly matter at young ages where the fit
+range does not reach.
+
+Built shift_curve in discounting.py, scale_params in mortality.py, and
+stressed_liability, stress_table and liability_duration in valuation.py.
+Settled D36 to D39.
+
+The design point worth keeping. Running a stress required no change to any
+valuation function, because the curve, the parameters and the survival
+function are already arguments rather than module constants. The improvement
+rate was the only one not directly reachable, and functools.partial reached
+it in one line.
+
+Stress table, assets fixed at 94,317,503.07 throughout:
+
+  Central              101,964,868.19    0.000000     0.925000
+  Rates -1.0 per cent  118,470,979.02   16.188037     0.796123
+  Rates +1.0 per cent   88,750,330      -12.959891    1.062728
+  Mortality +10          98,729,053.39   -3.173460    0.955317
+  Mortality -10         105,528,000       3.494506    0.893767
+  Improvement 1.75      105,327,978.07    3.298303    0.895465
+  CPI +0.5              106,948,622.09    4.887717    0.881895
+
+The two asymmetries are the substance. Rates down one point costs 16.188037
+per cent while rates up one point saves 12.959891, a gap of 3.228146
+percentage points. Mortality lighter by 10 per cent costs 3.494506 against
+3.173460 saved when it is heavier, a gap of 0.321046. Both are convexity,
+and the rates one is an order of magnitude larger because discount factors
+are far more convex in the yield than survival probabilities are in a
+mortality multiplier.
+
+Liability duration 14.424412846156935 years on the cohort basis. It sits
+just below the average of the two 100 basis point responses, 14.573964,
+which is right: the average of two large symmetric moves cancels the second
+order term but retains a third order one.
+
+The Day 12 prediction is confirmed. Period basis duration is
+13.322670621680045, so the cohort basis is longer by 1.1017422244768902
+years, or 8.26967997455419 per cent. Allowing for mortality improvement does
+not only raise the liability, it makes it more interest rate sensitive.
+
+One error of mine to record. I was told to run the period comparison as
+improvement=0.0, which returns nan rather than a number, because the closed
+form divides by log(1 - improvement). Logged as F32 with the 1e-10
+workaround and the accuracy check.

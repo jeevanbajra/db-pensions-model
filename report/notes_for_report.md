@@ -164,6 +164,33 @@ The model assumes no member survives beyond age 120. Some cut-off is needed to
 make the calculation finite. The chance of reaching 120 under this basis is
 around three in a billion, so the choice has almost no effect on the answer.
 
+### Spouses' pensions
+
+On the death of a member, half of their pension continues to a surviving
+spouse for the rest of that spouse's life, increasing on the same basis as
+the member's own pension did.
+
+Three assumptions are needed and none of them is observable in the data.
+The spouse is assumed to be of the opposite sex and three years younger than
+a male member, three years older than a female member. Eighty per cent of
+male members and seventy per cent of female members are assumed to leave a
+surviving spouse.
+
+The first two are long standing conventions. The proportions are chosen
+figures in the range used in practice rather than anything derived from
+this scheme, and a real valuation would set them from the scheme's own
+experience. They enter as a straight multiplier, so the liability moves in
+exact proportion to them: reducing the male figure from 80 to 75 per cent
+reduces the male spouse liability by 6.25 per cent and changes nothing else.
+
+### Assets
+
+The scheme is synthetic and holds no actual investments, so the asset value
+is a chosen input rather than a measurement. It is set at 92.5 per cent of
+the central liability, giving 94,317,503.07. Once set it is a fixed amount
+in pounds and does not move when an assumption changes, which is what makes
+the funding ratio meaningful under stress.
+
 ---
 
 ## Methodology
@@ -221,6 +248,49 @@ with the same accrued pension have exactly the same benefit. Both are put
 through the same calculation on purpose, and a test checks that the actives
 have not been dropped.
 
+### Valuing the spouse's pension
+
+A payment reaches the spouse at a given date only if two things are true at
+once: the spouse is still alive, and the member has died. The probability of
+both is taken as the product of the two, which assumes the lives are
+independent.
+
+For a member not yet retired there is a further condition. No benefit is
+payable on death before retirement, so the member must first survive to
+retirement and then die. The probability of a payment is the chance of
+reaching retirement less the chance of still being alive at the date in
+question.
+
+The amount is straightforward. Because the spouse's pension inherits the
+member's increase history rather than starting afresh at the date of death,
+it is always exactly half of what the member's own pension would have been
+at that date.
+
+### Stress testing
+
+Each stress recalculates the whole liability with one assumption changed and
+everything else held. Assets are held fixed in pounds throughout, so the
+funding ratio moves with the liability.
+
+Four assumptions are stressed: the level of gilt yields, the general level
+of mortality, the rate at which mortality is assumed to improve, and price
+inflation. The interest rate stress moves the whole yield curve in parallel,
+including the extrapolated portion beyond 40 years.
+
+### Liability duration
+
+Duration is the standard measure of how sensitive a liability is to interest
+rates. It is quoted in years because the sensitivity of a single future
+payment is its own maturity, and a stream of payments behaves like the
+average of its payment dates weighted by present value. A duration of
+fifteen years means a one percentage point fall in yields costs roughly
+fifteen per cent.
+
+It is measured here by moving the whole curve up and down by one basis point
+and observing the response, rather than from a formula. This makes no
+assumption about the shape of the cashflows and picks up the extrapolation
+beyond 40 years automatically.
+
 ---
 
 ## Results
@@ -241,6 +311,9 @@ basis alone, it depends on the discount curve it is measured against.
 Predicts a longer liability duration on the cohort basis than the period basis,
 which is the correct basis showing the scheme to be more interest-rate sensitive
 rather than less. To be confirmed on Days 16 to 17.
+
+CONFIRMED (Day 16): cohort duration 14.42 years against period 13.32, longer
+by 1.10 years or 8.27 per cent.
 
 ### Pensioner liability
 
@@ -304,6 +377,81 @@ younger, which raises their liability per pound of pension relative to
 pensioners, but their pensions are also further from being paid, which lowers
 it, and on this data the two effects happen to offset.
 
+### The spouse's pension costs three times as much for a man as for a woman
+
+Valued for each member individually, the spouse's pension adds 12.60 per
+cent to the cost of a male pensioner's benefit and 3.96 per cent to a female
+pensioner's, a ratio of 2.92.
+
+The reason is entirely the age difference and the difference in life
+expectancy. A male member typically has a younger wife who outlives him by a
+decade, so the pension continuing to her is expensive. A female member
+typically has an older husband who dies first, so the benefit often never
+comes into payment at all.
+
+The effect is visible before any money enters the calculation. Taking only
+the probability that a payment is due at each date, the figure for a male
+aged 65 peaks at 0.379 some 24 years out, against 0.150 at 19 years for a
+female aged 65. Across the whole payment period the male figure is 2.89
+times the female one, and the 2.92 in the liability barely moves from it.
+
+Across the scheme as a whole, spouses' pensions add 10.49 per cent, or
+9,677,671.55, bringing the total liability to 101,964,868.19. A scheme level
+percentage of that kind is a blend of two very different numbers and it is
+worth saying so, because the split of a membership between men and women
+changes it materially.
+
+### Funding position
+
+Total liability 101,964,868.19 against assets of 94,317,503.07. A funding
+level of 92.5 per cent and a deficit of 7,647,365.11, set against an annual
+pension roll of 8,130,201.07.
+
+### Sensitivity
+
+  Stress                  Liability      Change      Funding level
+  Central                101,964,868      0.00%          92.5%
+  Yields fall 1%         118,470,979    +16.19%          79.6%
+  Yields rise 1%          88,750,330    -12.96%         106.3%
+  Mortality 10% heavier   98,729,053     -3.17%          95.5%
+  Mortality 10% lighter  105,528,000     +3.49%          89.4%
+  Improvement 1.75% pa   105,327,978     +3.30%          89.5%
+  Inflation +0.5%        106,948,622     +4.89%          88.2%
+
+Interest rates dominate. A one point fall in yields costs sixteen per cent of
+the liability, five times the effect of a ten per cent change in mortality
+and three times the effect of half a point on inflation.
+
+### The scheme loses more from falling yields than it gains from rising ones
+
+The yield stresses are not symmetric. A one point fall costs 16.19 per cent
+and a one point rise saves 12.96 per cent, a gap of 3.23 percentage points
+on moves of identical size.
+
+This is convexity, and it is a property of discounting rather than an
+artefact of the model. It is also the reason schemes hedge interest rate
+risk rather than taking a view on it: the downside is larger than the
+upside, so being unhedged is a losing bet even against a rate move that is
+equally likely in either direction.
+
+The same asymmetry appears in the mortality stresses, at 0.32 percentage
+points, an order of magnitude smaller.
+
+### Allowing for improving mortality makes the scheme more interest rate sensitive, not just more expensive
+
+The liability duration is 14.42 years, meaning a one percentage point fall
+in yields costs about 14.4 per cent of the liability.
+
+Valued on current mortality with no allowance for future improvement, the
+duration would be 13.32 years. Allowing for improvement lengthens it by 1.10
+years, or 8.27 per cent.
+
+The practical consequence matters more than the numbers. A scheme that
+valued its members on today's mortality rates would believe its duration was
+13.3 years and would hedge its interest rate exposure on that basis, leaving
+around eight per cent of that exposure uncovered. The correct basis reveals
+more risk rather than less.
+
 ---
 
 ## Sensitivity Analysis
@@ -352,6 +500,27 @@ A member who dies before 65 is assumed to produce no payment at all. Real
 schemes generally pay a spouse's pension or a return of contributions. This
 understates the liability by a small amount.
 
+### Spouses' lives are assumed independent of members' lives
+
+The calculation multiplies the spouse's survival probability by the member's
+probability of death, which treats the two lives as unrelated. They are not.
+Couples share a household, an income and a way of living, and bereavement
+itself raises mortality, so they die closer together than independence
+implies.
+
+The effect is that the periods where one is alive and the other is dead are
+shorter than modelled, so the true cost of the benefit is lower than the
+figure given here. The error is therefore in the conservative direction.
+Modelling it properly would require a joint life basis.
+
+### Every member is assumed to have an opposite sex spouse of a fixed age difference
+
+The model assumes one spouse, of the opposite sex, exactly three years older
+or younger, and alive at the valuation date. In reality some members are
+single, some are widowed, some have a same sex spouse, and the age
+difference varies. The proportion married assumption is a crude allowance
+for the first two of these and nothing allows for the others.
+
 ---
 
 ## Phrasings worth keeping
@@ -359,6 +528,15 @@ understates the liability by a small amount.
 Using a current pensioner annuity factor for a deferred member does not produce
 a slightly wrong answer. It produces the correct answer to a different
 question.
+
+A scheme that valued its members on today's mortality would believe its
+duration was 13.3 years and would hedge accordingly, leaving around eight
+per cent of its interest rate exposure uncovered. The correct basis reveals
+more risk, not less.
+
+Being unhedged is a losing bet even against a rate move that is equally
+likely in either direction, because the scheme loses more when yields fall
+than it gains when they rise.
 
 ---
 
