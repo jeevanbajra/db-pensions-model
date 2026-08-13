@@ -105,3 +105,28 @@ def discount_factor(t, curve):
     yt = spot_rate(t, curve)
     vt = np.exp(-yt * t)
     return vt
+
+def shift_curve(curve, shift):
+    """
+    Returns a copy of the origional curve with all the rates shifted in paralell.
+    A copy is returned as it will leave the origional one unmodified and safe for reuse.
+
+    Both the spot and forward columns are shifted by the same magnitude. This is the case as
+    the spot_rate interpolates up until 40 years and extrapolates above it using the 40 year forward.
+    So shifting only the spot column would leave the extrapolated part unmoved, which is where
+    over half of the discount horizon is covered for the younger members.
+
+    The extrapolation is y(t) = (y(40)*40 + f(40)*(t-40)) / t, so adding d to both y(40) and
+    f(40) adds d*40 + d*(t-40) = d*t to the numerator, and y(t) gains exactly d. 
+
+    Parameters
+    curve : gilt curve frame as returned by load_curve.
+    shift : parallel shift in decimals, so -0.01 is a one percentage point
+        fall. Zero returns an unchanged copy.
+
+    Returns
+    A new frame with the same columns and the rates shifted.
+    """
+    shifted = curve.copy()
+    shifted[["spot_rate", "forward_rate"]] += shift
+    return shifted

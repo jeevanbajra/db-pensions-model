@@ -6,10 +6,12 @@ discount curve from discounting.py. This is the first module that
 depends on both.
 """
 import numpy as np
+from functools import partial
+import pandas as pd
 
 from mortality import (survival_probability, survival_probability_cohort,
-                       UPPER_LIMITING_AGE)
-from discounting import load_curve, discount_factor
+                       UPPER_LIMITING_AGE, IMPROVEMENT_RATE, scale_params)
+from discounting import load_curve, discount_factor, shift_curve
 from membership import VALUATION_DATE, NORMAL_RETIREMENT_AGE
 
 
@@ -351,8 +353,8 @@ def spouse_liability(members, params, curve, frequency=12, cpi=CPI,
         )
         all_epvs.append(indiv_epv)
     all_member_epvs = np.array(all_epvs)
-    total_liability = all_member_epvs.sum()
-    return total_liability, all_member_epvs
+    total_spouse_liability = all_member_epvs.sum()
+    return total_spouse_liability, all_member_epvs
 
 
 def funding_position(total_liability, assets):
@@ -376,3 +378,117 @@ def funding_position(total_liability, assets):
     funding_ratio = assets / total_liability
     deficit = total_liability - assets
     return funding_ratio, deficit
+
+
+def total_liability(members, params, curve, frequency=12, cpi=CPI,
+                    revaluation=REVALUATION_RATE,
+                    survival_fn=survival_probability_cohort):
+    """
+    Returns the total liability of all pensioner, deferred and spouse combined, and the sperate elements.
+    Calls each of pensioner, deferred and spouse individual section liabilities and sums them.
+    """
+    pensioner_liab, _ = pensioner_liability(members, params, curve, frequency=frequency, cpi=cpi,
+                        survival_fn=survival_fn)
+    deferred_liab, _ = deferred_liability(members, params, curve, frequency=frequency, cpi=cpi,
+                       revaluation=revaluation,
+                       survival_fn=survival_fn)
+    spouse_liab, _ = spouse_liability(members, params, curve, frequency=frequency, cpi=cpi,
+                     revaluation=revaluation,
+                     survival_fn=survival_fn)
+    total = pensioner_liab + deferred_liab + spouse_liab
+    return total, (pensioner_liab, deferred_liab, spouse_liab)
+
+
+def stressed_liability(members, params, curve, rate_shift=0.0,
+                       mortality_multiplier=1.0,
+                       improvement=IMPROVEMENT_RATE,
+                       cpi=CPI, revaluation=REVALUATION_RATE,
+                       frequency=12):
+    """
+    The total liability scheme with one or more assumptions stressed.
+
+    If this is ran wihtout any optional argument it returns the same as the regular
+    total_liability as the arguments will defaut to the central basis.
+
+    Three things a stress can change are involved in the function: the curve,
+    the mortality parameters and survival function. The function builds stress versions of these.
+
+    rate_shift moves the spot and forward columns of the curve by the same amount, which 
+    shifts the whole curve in parallel. See shift_curve
+
+    mortality_multiplier scales the force of mortality at every age. mu=A+B*C^x so this is done by 
+    scaling A and B and holding C.
+
+    improvement replaces the annual mortality improvement rate. Used using functools.partial.
+
+    cpi and revaluation are seperate arguments and so stressing one does not move the other (D28).
+
+    Parameters
+    members : DataFrame as written by membership.py.
+    params : dict keyed on "M" and "F", each holding an (A, B, C) tuple.
+    curve : gilt curve frame as returned by discounting.load_curve.
+    rate_shift : parallel shift on the gilt curve in decimals, so -0.01 is
+        a one percentage point fall. Zero on the central basis.
+    mortality_multiplier : multiple of the force of mortality at every age.
+        One on the central basis.
+    improvement : annual mortality improvement rate, D23.
+    cpi : in-payment increase assumption, D25.
+    revaluation : pre-retirement revaluation assumption, D28.
+    frequency : payments per year, monthly under D24.
+
+    Returns
+    Same as total_liability: the total in pounds, and a tuple of the
+    pensioner, non-pensioner and spouse components.
+    """
+    stressed_curve = shift_curve(curve, rate_shift)
+    stressed_params = scale_params(params, mortality_multiplier)
+    stressed_survival = partial(survival_probability_cohort, improvement=improvement)
+    return total_liability(members, stressed_params, stressed_curve,
+                           frequency=frequency, cpi=cpi,
+                           revaluation=revaluation,
+                           survival_fn=stressed_survival)
+
+def stress_table(members, params, curve, assets):
+    """
+    Funding position under each stress, as one row per stress.
+
+    Runs the central basis and a single row of stresses and provides the liability,
+    percentage change against the basis, funding ratio and deficit for each. 
+
+    Liabilities move with assumtions, however assets stay fixed causing the funding ratio
+    to change. Recomputating assets would result in no change as a consequence of stress.
+
+    The central row is run first as it is the one being compared to so the order matters.
+
+    Each stress is defined as a label and an argument for stressed liability, which
+    are unpacked into the cell.
+
+    Parameters
+    members : DataFrame as written by membership.py.
+    params : dict keyed on "M" and "F", each holding an (A, B, C) tuple.
+    curve : gilt curve frame as returned by discounting.load_curve.
+    assets : market value of scheme assets in pounds, fixed across all rows.
+
+    Returns
+    DataFrame with columns stress, liability, change_pct, funding_ratio and
+    deficit, one row per stress.
+    """
+    stresses = [("central", {}), ("rates -1.0%", {"rate_shift":-0.01}),("rates +1.0%", {"rate_shift":0.01}),
+                ("mortality +10%", {"mortality_multiplier": 1.10}),
+                ("mortality -10%", {"mortality_multiplier": 0.90}),
+                ("improvement 1.75%", {"improvement":0.0175}), ("cpi +0.5%", {"cpi":0.035})]
+    rows = []
+    base = None
+    for label, kwargs in stresses:
+        total, _ = stressed_liability(members, params, curve, **kwargs)
+        if base is None:
+            base = total
+        ratio, deficit = funding_position(total, assets)
+        rows.append({
+            "stress": label,
+            "liability": total,
+            "change_pct": 100 * (total / base - 1),
+            "funding_ratio": ratio,
+            "deficit": deficit,
+        })
+    return pd.DataFrame(rows)

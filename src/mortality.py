@@ -315,7 +315,8 @@ def load_gm_parameters(path=PROCESSED_PATH):
     Two return values: a dictionary keyed on "M" and "F" holding (A, B, C) tuples for the caller,
     and the full frame including standard errors for anything that needs them.
 
-    no fallback to re-fitting if the file is missing, and that this is deliberate: a silent fallback would work locally and fail in deployment, which is the failure this pair of functions exists to prevent
+    Deliberately no fallback to re-fitting if the file is missing because a silent fallback would
+    work locally and fail in deployment, which is the failure this pair of functions exists to prevent.
     """
     parameters = pd.read_csv(path, float_precision="round_trip")
     assert list(parameters.columns) == ["sex", "A", "B", "C", "se_A", "se_B", "se_C"], "unexpected columns in gm_parameters.csv"
@@ -325,3 +326,16 @@ def load_gm_parameters(path=PROCESSED_PATH):
         for sex in ("M", "F")
     }
     return params, parameters
+
+
+def scale_params(params, multiplier):
+    """
+    Scale the force of mortality at every age by multiplier.
+
+    mu = A + B * C^x, so multiplying A and B by the same factor multiplies
+    mu by that factor exactly. C is the rate at which mortality accelerates
+    with age and is left alone: a level stress should not change the shape
+    of the curve.
+    """
+    return {sex: (A * multiplier, B * multiplier, C)
+            for sex, (A, B, C) in params.items()}
