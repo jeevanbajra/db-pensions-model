@@ -492,3 +492,12 @@ def stress_table(members, params, curve, assets):
             "deficit": deficit,
         })
     return pd.DataFrame(rows)
+
+def liability_duration(members, params, curve, bump=0.0001, **kwargs):
+    """
+    """
+    up, _ = stressed_liability(members, params, curve, rate_shift=bump, **kwargs)
+    down, _ = stressed_liability(members, params, curve, rate_shift=-bump, **kwargs)
+    base, _ = stressed_liability(members, params, curve, **kwargs)
+    duration = -(up - down) / (2 * bump * base)
+    return duration
