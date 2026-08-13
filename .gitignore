@@ -9,6 +9,10 @@ data/processed/*
 # contain 28 July 2026 next month: committing it keeps the valuation reproducible
 !data/processed/gilt_curve.csv
 
+# gm_parameters.csv holds the fitted mortality parameters extracted once from a gitignored raw file.
+# Commiting it ensures that the valuati is reproducible and lets the deployed dashboard read the basis without refitting.
+!data/processed/gm_parameters.csv
+
 # Python leftovers
 __pycache__/
 *.pyc

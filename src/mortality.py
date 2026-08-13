@@ -31,6 +31,7 @@ from scipy.optimize import curve_fit
 # Path pattern as in membership.py: independent of working directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ONS_PATH = PROJECT_ROOT / "data" / "raw" / "nltuk198020223.xlsx"
+PROCESSED_PATH = PROJECT_ROOT / "data" / "processed" / "gm_parameters.csv"
 
 ONS_SHEET = "2022-2024"          # D2
 ONS_HEADER_ROW = 5               # real headers on Excel row 6
@@ -275,3 +276,52 @@ def survival_probability_cohort(x, t, A, B, C, improvement=IMPROVEMENT_RATE):
     cumulative_hazard = base_factor * (term_2 + term_3)
     survival_cohort = np.exp(- cumulative_hazard)
     return survival_cohort
+
+def extract_gm_parameters(out_path=PROCESSED_PATH):
+    """
+    Fits the Gompertz-Makeham parameters for both sexes from the ONS national life tables,
+    and commits them to a CSV.
+
+    It is only written once and is not called by the model in the same way that extract_curve
+    works for the gilt curve. This is because the source file is gitignored (D4) so Streamlit
+    Cloud cannot see it (F11), and a valuation whose mortality basis is not reproducable is
+    not checkable. 
+
+    Parameter: out_path
+
+    Returns the frame.
+    """
+    table = restrict_to_fit_range(add_force_of_mortality(load_ons_table()))
+    A_m, B_m, C_m, se_m = fit_gompertz_makeham(table, "M")
+    A_f, B_f, C_f, se_f = fit_gompertz_makeham(table, "F")
+    parameters = pd.DataFrame({
+        "sex": ["M", "F"],
+        "A": [A_m, A_f],
+        "B": [B_m, B_f],
+        "C": [C_m, C_f],
+        "se_A": [se_m[0], se_f[0]],
+        "se_B": [se_m[1], se_f[1]],
+        "se_C": [se_m[2], se_f[2]],
+    })
+    assert parameters.shape == (2, 7), f"expected (2, 7), got {parameters.shape}"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    parameters.to_csv(out_path, index=False)
+    return parameters
+
+def load_gm_parameters(path=PROCESSED_PATH):
+    """
+    Reads the commited CSV: gm_parameters.csv and returns the fitted parameters.
+
+    Two return values: a dictionary keyed on "M" and "F" holding (A, B, C) tuples for the caller,
+    and the full frame including standard errors for anything that needs them.
+
+    no fallback to re-fitting if the file is missing, and that this is deliberate: a silent fallback would work locally and fail in deployment, which is the failure this pair of functions exists to prevent
+    """
+    parameters = pd.read_csv(path, float_precision="round_trip")
+    assert list(parameters.columns) == ["sex", "A", "B", "C", "se_A", "se_B", "se_C"], "unexpected columns in gm_parameters.csv"
+    indexed = parameters.set_index("sex")
+    params = {
+        sex: (indexed.loc[sex, "A"], indexed.loc[sex, "B"], indexed.loc[sex, "C"])
+        for sex in ("M", "F")
+    }
+    return params, parameters
