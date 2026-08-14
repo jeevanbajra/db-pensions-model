@@ -61,6 +61,8 @@ Conventions used in this file:
 | D37 | Interest rate stress applied to both rate columns | Day 16 |
 | D38 | Mortality level stress by scaling A and B | Day 16 |
 | D39 | Duration measured numerically | Day 16 |
+| D40 | Scope frozen | Day 17 |
+| D41 | Life expectancy quoted on both bases | Day 17 |
 
 ### Flags
 
@@ -82,10 +84,10 @@ Conventions used in this file:
 | F14 | Spyder kernel will not start | OPEN, workaround in place |
 | F15 | Log-scale objective undefined for negative mu | OPEN, no action |
 | F16 | Gilt source file is a rolling download | RESOLVED Day 8 |
-| F17 | Fitted GM parameters not committed | RESOLVED DAY 16 |
+| F17 | Fitted GM parameters not committed | RESOLVED Day 16 |
 | F18 | 40-year forward sits well below the 40-year spot | OPEN, Day 15 |
 | F19 | pandas.read_csv float precision | RESOLVED Day 8 |
-| F20 | Extrapolation dominates the long horizon | OPEN, Day 15 |
+| F20 | Extrapolation dominates the long horizon | RESOLVED Day 17 |
 | F21 | Monthly payment frequency not implemented | RESOLVED Day 12 |
 | F22 | No cohort survival function exists | RESOLVED Day 12 |
 | F23 | Payment grid assumes an integer age | RESOLVED Day 13 for pensioners, Day 14 for deferreds |
@@ -96,8 +98,9 @@ Conventions used in this file:
 | F28 | membership.py run section was unguarded | RESOLVED Day 13 |
 | F29 | annuity_factor defaults to the period basis | OPEN, Day 15 |
 | F30 | valuation.py imports membership.py | OPEN, Day 15 |
-| F31 | Test suite uses a hardcoded mortality basis | RESOLVED Day 16 |
+| F31 | Test suite uses a hardcoded mortality basis | RESOLVED Day 16 & 17 |
 | F32 | Survival_probability_cohort returns nan at improvement = 0 | OPEN |
+| F33 | improved_force_of_mortality takes attained age |
 
 ---
 
@@ -1072,6 +1075,64 @@ One basis point is the conventional bump. The 100 basis point moves in the
 stress table give responses of +16.188037 and -12.959891 per cent, and the
 gap between them is convexity rather than duration.
 
+### D40: scope frozen (Day 17, 14 August)
+
+No new features are added to the model from today. The cut list below was
+written in advance, so that the decision about what
+to drop was made while there was time rather than under pressure.
+
+Cut, in order:
+
+1. Implied inflation term structure as a sensitivity (F25). One flat
+   inflation assumption stands, taken from market implied inflation at the
+   relevant maturities. Recorded in Limitations.
+2. Fixing the curve_fit RuntimeWarnings (F15). Cosmetic. The warnings arise
+   from taking the log of a non-positive value during optimisation and do
+   not affect the fitted parameters.
+3. The averaged-forward variant in the F20 extrapolation comparison. The
+   comparison runs flat-forward against flat-spot only. The averaging window
+   length would have been discretionary, which was the original reason for
+   preferring the single published f(40) under D19.
+4. The config.py refactor to remove valuation.py importing membership.py
+   (F30). Tidying. It changes no output and risks breaking working code.
+5. Deferred members. Not cut: the Day 14 decision gate was cleared and both
+   the deferred engine and the spouse benefit for deferreds are built.
+
+Not cuttable, in priority order if time runs short: the funding position,
+one interest rate stress, liability duration, the deployed dashboard, the
+trustee report, the README. The first three are complete as of Day 16.
+
+Contingency on the dashboard, decided now rather than on the day: if it is
+not deployed by the morning of Thursday 20 August, it ships as a local
+application with run instructions and screenshots in the README, and the
+remaining time goes to the report. A deployed dashboard is worth having, an
+unfinished report is not worth trading for it.
+
+From Monday 18 August, graduate applications take priority over anything
+unfinished here.
+
+### D41: life expectancy quoted on both bases (Day 17, 14 August)
+
+life_expectancy takes survival_fn as a parameter, defaulting to the cohort
+basis under D23. Passing survival_probability gives the period basis.
+
+At 65 the model gives 19.930308395302948 male and 22.50292141270108 female
+on the cohort basis, against 18.264535919118817 and 20.663614898299105 on
+the period basis. The gaps are 1.6657724761841308 and 1.8393065144019758
+years, or 9.120256236242197 and 8.901184635188763 per cent.
+
+The report quotes both, because the gap is longevity improvement expressed
+in years, which is more readable than the same assumption stated as a
+percentage on an annuity factor or a liability. ONS publishes period
+figures, so the period basis is the like for like comparison against
+published tables.
+
+Prediction error to record: I expected the gap in years to be larger for
+men, on the grounds that heavier mortality means a given proportional
+improvement buys more years. Proportionally the two sexes are almost
+identical, and in years the female gap is larger because the same
+proportional gain applied to a longer life is more years.
+
 ---
 
 ## Flags
@@ -1386,6 +1447,19 @@ liability under flat-forward, flat-spot and averaged-forward extrapolations to
 be compared on Day 15. This belongs in the report in plain words, and it gets a
 section rather than a sentence.
 
+RESOLVED (Day 17): quantified. Total liability under flat-spot
+extrapolation is 101,755,973.20 against 101,964,868.19 under the D19
+flat-forward method, a difference of 208,894.99 or 0.20486957144022488 per
+cent. Funding ratio moves from 0.925 to 0.9268989338735107.
+
+The discount factors at 76.78 years differ by a factor of
+1.972214986392463, so the scheme level effect is roughly 475 times smaller
+than the effect on a single cashflow at the extreme. The mitigation
+hypothesised on Day 9, that survival to those ages is vanishingly unlikely,
+holds and is now measured rather than asserted.
+
+D19 stands. The averaged-forward variant is cut under D40.
+
 ### F21: Monthly payment frequency not implemented
 
 Raised Day 10. Status: RESOLVED (Day 12).
@@ -1635,6 +1709,11 @@ rather than holding literal parameters. Ten tests pass in 1.15 seconds. Note
 that tests/test_mortality.py still re-fits from data/raw, so the suite as a
 whole is still not clone-and-run.
 
+RESOLVED (Day 17): fully closed. Both test files now read the committed
+gm_parameters.csv, and grep confirms no test references data/raw,
+load_ons_table or fit_gompertz_makeham. The suite runs on a fresh clone with
+no manual data retrieval. Twelve tests pass in 1.25 seconds.
+
 ### F32: survival_probability_cohort returns nan at improvement = 0 (Day 16, 13 August)
 
 The closed form contains A / log(1 - improvement). At improvement = 0 that
@@ -1652,6 +1731,20 @@ exact 0.44876302444756944 against 0.44876302501626564, a relative error of
 
 Proper fix is a guard raising ValueError and pointing at
 survival_probability for the period basis. Not yet implemented.
+
+### F33: improved_force_of_mortality takes attained age (Day 17, 14 August)
+
+The first argument is the age at that moment, not the age at the valuation
+date. The second argument drives only the improvement factor. Integrating
+the force over a period therefore requires the age to advance with time:
+improved_force_of_mortality(x + t, t, A, B, C), not (x, t, A, B, C).
+
+Passing a fixed age holds the member still while improvement accrues, which
+returns a number rather than an error. Over 20 years from age 65 the wrong
+call gives 0.20315906133404954 against a correct 0.653876936215243.
+
+Now covered by test_cohort_survival_matches_improved_force. Docstring should
+state the convention explicitly.
 
 ---
 
@@ -2346,3 +2439,90 @@ One error of mine to record. I was told to run the period comparison as
 improvement=0.0, which returns nan rather than a number, because the closed
 form divides by log(1 - improvement). Logged as F32 with the 1e-10
 workaround and the accuracy check.
+
+## Day 17, Friday 14 August
+
+Scope freeze, and the four items carried from Day 16. A travel day with a
+hard stop at 11am and the rest done on arrival.
+
+64.5 to roughly 66 per cent. Low by design: the model was finished on Day 16,
+so today was closing flags rather than building.
+
+Froze scope under D40. The cut list was written in advance for exactly this
+day, so the decision about what to drop was made with time in hand rather
+than under pressure. Nothing was added to it today, which is the point.
+
+Closed F20, which has been open since Day 9 and was described in these notes
+as the largest open judgement in the model.
+
+Built the flat-spot comparison by extending the curve with rows from 40.5 to
+90 years, all holding y(40). That turns the region above 40 into
+interpolation rather than extrapolation, so spot_rate returns a flat rate
+across it with no code change anywhere. A data change rather than a code
+change, and the same idea as shift_curve.
+
+Total liability under flat-spot is 101,755,973.20 against 101,964,868.19
+under the D19 flat-forward method. A difference of 208,894.99, or
+0.20486957144022488 per cent, and the funding ratio moves from 0.925 to
+0.9268989338735107.
+
+The discount factors at 76.78 years differ by a factor of
+1.972214986392463, so the effect at scheme level is about 475 times smaller
+than the effect on a single cashflow at the extreme. The mitigation
+hypothesised on Day 9, that survival to those ages is vanishingly unlikely,
+is now measured rather than asserted. The largest open judgement in the model
+turns out to be one of the smallest effects in it. D19 stands.
+
+Added survival_fn to life_expectancy under D41, so it reports on either
+basis. At 65 the cohort figures are 19.930308395302948 male and
+22.50292141270108 female, against period figures of 18.264535919118817 and
+20.663614898299105. The gaps are 1.6657724761841308 and 1.8393065144019758
+years.
+
+That is longevity improvement expressed in years, which is the fourth
+currency this same assumption has now been quoted in, after a percentage on
+an annuity factor, a percentage on the liability, and 1.10 years on
+duration. Years is the one a trustee can hold.
+
+Wrote the force reconciliation test, which is the most valuable test in the
+suite and the last one I would have thought to write. Every other test
+checks arithmetic and would pass on a wrongly derived closed form. This one
+compares the cohort survival function against numerical integration of the
+improved force it was derived from, so it checks the derivation itself.
+
+The two routes agree. Closed form 0.6538769356789146 against numerical
+integration 0.653876936215243, a difference of -5.363284261150625e-10, which
+is trapezium rule error. The Day 12 hand integration is confirmed.
+
+Also pinned the single force value at 0.07399580786141326, being the
+improved force for a life aged 65 today at attained age 85. Exact
+arithmetic, no integration, so the test asserts equality rather than
+approximate equality.
+
+Found F33 in the process. improved_force_of_mortality takes the attained age
+as its first argument, not the age at the valuation date, so integrating
+over a period needs the age to advance with time. Passing a fixed age holds
+the member still while improvement accrues and returns a plausible number
+rather than an error: 0.20315906133404954 against the correct
+0.653876936215243 over the same period.
+
+Closed F31 completely. Both test files read the committed parameters and
+nothing in the suite touches data/raw, so the repository is clone-and-run
+for the first time. Twelve tests pass.
+
+Two prediction errors to record, both from Claude and both corrected on the
+spot.
+
+First, the life expectancy gap in years was predicted to be larger for men,
+on the grounds that heavier mortality means a given proportional improvement
+buys more years. It is larger for women. Proportionally the two are nearly
+identical at 9.120256236242197 and 8.901184635188763 per cent, and in years
+the female gap is larger because the same proportional gain applied to a
+longer life is more years.
+
+Second, the force reconciliation was scoped wrongly in two ways: the call
+was written with a fixed age, which is F33 above, and the recorded value
+0.07399580786141326 was described as an integral when it is a single force
+value. Both were diagnosed from the numbers rather than guessed at, and the
+wrong figure of 0.20315906133404954 was reproduced exactly from the
+hypothesis before the fix was applied.

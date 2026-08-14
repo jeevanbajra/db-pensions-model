@@ -130,3 +130,15 @@ def shift_curve(curve, shift):
     shifted = curve.copy()
     shifted[["spot_rate", "forward_rate"]] += shift
     return shifted
+
+def extend_flat_spot(curve):
+    extended_flat = curve.copy()
+    extra_maturities = np.arange(40.5, 90.5, 0.5)
+    y40 = extended_flat.loc[extended_flat["maturity"] == 40.0, "spot_rate"].iloc[0]
+    extension = pd.DataFrame({
+        "maturity": extra_maturities,
+        "spot_rate": y40,
+        "forward_rate": y40,
+    })
+    return pd.concat([extended_flat, extension], ignore_index = True)
+    

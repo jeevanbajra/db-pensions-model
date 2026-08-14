@@ -207,32 +207,7 @@ def survival_probability(x, t, A, B, C):
     t_p_x = np.exp(-(term_1 + term_2*term_3))
     return t_p_x
 
-def life_expectancy(x, A, B, C):
-    """
-    Computes complete period life expectancy at age x, under the fitted Gompertz-Makeham.
-    Period in this instance means current mortality rates held fixed for all future ages,
-    with no allowance for improvement, ONS table is a period table and the published e(65)
-    is a period figure, so the comparison is like for like.
-    
-    Numerical integration of t_p_x from t = 0 to the upper limiting age,
-    using the trapezoidal rule.
-    The integral is truncated at the upper limiting age of 120 (D10),
-    understating the result very slightly.
-    Trapezoidal integration over integer steps gives the complete expectation
-    rather than the curtate one, so no half-year adjustment is applied.
 
-    Age x, and the fitted A, B, C for the relevant sex.
-
-    Returns expected further years of life.
-
-    At x = 65 this gives 18.26 male and 20.66 female against published ONS figures of 
-    18.73 and 21.16, so within half a year. Both understate, consistent with the old-age 
-    flattening limitation.
-    """
-    t_vals = np.arange(0, 56)
-    s_prob = survival_probability(x, t_vals, A, B, C)
-    p_life = np.trapezoid(s_prob, t_vals)
-    return p_life
 
 def improved_force_of_mortality(x, years_from_valuation, A, B, C, improvement=IMPROVEMENT_RATE):
     """
@@ -276,6 +251,36 @@ def survival_probability_cohort(x, t, A, B, C, improvement=IMPROVEMENT_RATE):
     cumulative_hazard = base_factor * (term_2 + term_3)
     survival_cohort = np.exp(- cumulative_hazard)
     return survival_cohort
+
+def life_expectancy(x, A, B, C, survival_fn=survival_probability_cohort):
+    """
+    Computes complete life expectancy at age x, under the fitted Gompertz-Makeham.
+    
+    Numerical integration of t_p_x from t = 0 to the upper limiting age,
+    using the trapezoidal rule.
+    The integral is truncated at the upper limiting age of 120 (D10),
+    understating the result very slightly.
+    Trapezoidal integration over integer steps gives the complete expectation
+    rather than the curtate one, so no half-year adjustment is applied.
+
+    Age x, and the fitted A, B, C for the relevant sex, survival_fn which defaults
+    to the cohort basis (D23) and if survival probability is passed then it returns
+    the period basis.
+    Period holds todays rates fixed whereas cohort accounts for furture improvement.
+
+    On the period basis at 65, the model gives male: 18.26 and female: 20.66 against published
+    ONS figures of male: 18.73 and female: 21.16. ONS publishes period figures, so the 
+    period basis is a like for like comparison compared to the cohort which should not be
+    checked against it.
+
+    Returns complete expectation of life at age x on a basis given by survival_fn.
+
+    """
+    t_vals = np.arange(0, UPPER_LIMITING_AGE - x + 1)
+    s_prob = survival_fn(x, t_vals, A, B, C)
+    p_life = np.trapezoid(s_prob, t_vals)
+    return p_life
+
 
 def extract_gm_parameters(out_path=PROCESSED_PATH):
     """

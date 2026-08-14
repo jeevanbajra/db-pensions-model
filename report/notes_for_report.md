@@ -452,11 +452,51 @@ valued its members on today's mortality rates would believe its duration was
 around eight per cent of that exposure uncovered. The correct basis reveals
 more risk rather than less.
 
+### Longevity improvement expressed in years
+
+A man aged 65 at the valuation date is expected to live a further 19.93
+years on the basis used here, against 18.26 if mortality never improved
+from today's rates. For a woman the figures are 22.50 and 20.66.
+
+The gap is longevity improvement stated in the unit a reader can hold: 1.67
+years for men and 1.84 for women.
+
+Note that the same assumption reads differently depending on how it is
+expressed. Proportionally the improvement is almost identical between the
+sexes, at 9.1 per cent for men and 8.9 for women. In years it is larger for
+women, because the same proportional gain applied to a longer life is more
+years.
+
+The published ONS figures for 2022 to 2024 are 18.73 and 21.16. Those are
+period figures, holding current rates fixed, so the comparison is with the
+18.26 and 20.66 above rather than with the improved figures. The model
+understates both by under half a year, which is consistent with the fitted
+curve flattening less than observed mortality does at the oldest ages.
+
 ---
 
 ## Sensitivity Analysis
 
-Nothing yet.
+### Extrapolating gilt yields beyond 40 years
+
+The market gives no guidance beyond 40 years, and for the youngest member of
+this scheme nearly half the discount period lies past that point. The model
+assumes the forward rate stays flat at its 40 year level. The main
+alternative is to hold the spot rate flat instead.
+
+At the very longest horizon the two are far apart. One pound payable in 77
+years is worth 2.92 pence on the chosen method and 1.48 pence on the
+alternative, a factor of nearly two.
+
+At scheme level the difference is 208,895, or 0.20 per cent of the
+liability, and the funding level moves from 92.5 to 92.7 per cent.
+
+The two figures are reconciled by the fact that almost nobody lives that
+long. The payments being discounted at those horizons have already been
+multiplied by a survival probability of around one in sixty million, so a
+factor of two on them changes almost nothing. This was flagged early in the
+project as the largest open judgement in the model, and quantifying it shows
+it is one of the smallest effects.
 
 ---
 
