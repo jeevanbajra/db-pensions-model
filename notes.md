@@ -100,7 +100,7 @@ Conventions used in this file:
 | F30 | valuation.py imports membership.py | OPEN, Day 15 |
 | F31 | Test suite uses a hardcoded mortality basis | RESOLVED Day 16 & 17 |
 | F32 | Survival_probability_cohort returns nan at improvement = 0 | OPEN |
-| F33 | improved_force_of_mortality takes attained age |
+| F33 | improved_force_of_mortality takes attained age | OPEN |
 
 ---
 
