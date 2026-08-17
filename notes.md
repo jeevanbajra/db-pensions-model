@@ -63,6 +63,7 @@ Conventions used in this file:
 | D39 | Duration measured numerically | Day 16 |
 | D40 | Scope frozen | Day 17 |
 | D41 | Life expectancy quoted on both bases | Day 17 |
+| D42 | Assets are derived in the model, not typed into a notebook | Day 20 |
 
 ### Flags
 
@@ -96,11 +97,13 @@ Conventions used in this file:
 | F26 | LPI cap applied to a central estimate | OPEN, limitations only |
 | F27 | Inflation raw file is the only copy | OPEN, Day 15 |
 | F28 | membership.py run section was unguarded | RESOLVED Day 13 |
-| F29 | annuity_factor defaults to the period basis | OPEN, Day 15 |
+| F29 | annuity_factor defaults to the period basis | OPEN, Day 19 |
 | F30 | valuation.py imports membership.py | OPEN, Day 15 |
 | F31 | Test suite uses a hardcoded mortality basis | RESOLVED Day 16 & 17 |
 | F32 | Survival_probability_cohort returns nan at improvement = 0 | OPEN |
 | F33 | improved_force_of_mortality takes attained age | OPEN |
+| F34 | The three headline figures are rounded independently | OPEN |
+| F35 | Docstring defects in valuation.py | OPEN |
 
 ---
 
@@ -118,6 +121,9 @@ Conventions used in this file:
   Solving is slower as a result. Not worth repairing before deadline.
 - `requirements.txt` deliberately left empty until Day 24, when it will
   be generated from the packages actually used.
+- pyarrow reinstalled with pip on Day 20 after a protobuf symbol mismatch between
+  conda and pip native libraries broke every Streamlit table render. The four
+  pinned package versions were re-checked afterwards and none had moved.
 
 ---
 
@@ -133,6 +139,14 @@ Conventions used in this file:
   files, not folders
 - `notebooks/scratch.ipynb` is gitignored. It is a workbench, not a
   deliverable (F14)
+- requirements.txt at the repo root, five pinned versions.
+  dashboard/app.py, currently the deployment check rather than the dashboard.
+  Deployed at db-pensions-model-2r4jybbvveterckkr3pjpo.streamlit.app, Python 3.11.
+- F11 and F17 are now closed with evidence rather than argument. A machine with no
+  conda environment, no data/raw and no ONS spreadsheet loads the committed
+  parameters and curve and returns the right shapes.
+- The .gitkeep in dashboard/ is redundant now a real file lives there. Remove on
+  README day.
 
 ---
 
@@ -1133,6 +1147,25 @@ improvement buys more years. Proportionally the two sexes are almost
 identical, and in years the female gap is larger because the same
 proportional gain applied to a longer life is more years.
 
+### D42: assets are derived in the model, not typed into a notebook
+
+INITIAL_FUNDING_LEVEL existed in valuation.py but nothing in src used it. The
+94,317,503.07 asset figure was only ever produced in notebooks/scratch.ipynb, so
+the dashboard could not reach it, stress_table took an assets argument with no
+source in the model, and anyone cloning the repo could not reproduce it.
+
+scheme_assets(members, params, curve, funding_level=INITIAL_FUNDING_LEVEL)
+returns the central total liability multiplied by the funding level. It does not
+round. Rounding belongs at display.
+
+funding_position deliberately still takes assets as a plain number. It is not
+changed. Keeping the two separate is what allows the funding ratio to move under
+stress, and it means the same function works for a derived figure or a real
+scheme's audited value.
+
+Same class of problem as D18 and F17 and the last one of its kind: a figure the
+model depended on that lived outside the model.
+
 ---
 
 ## Flags
@@ -1675,6 +1708,18 @@ survival_probability explicitly. Breaking the tests is the point, since a test
 asserting a period figure should say so in its own body rather than inherit it
 from a default.
 
+RESCOPED (Day 19). Checked against the code rather than the notes. The
+scheme level chain is unaffected: total_liability defaults to
+survival_probability_cohort and passes survival_fn explicitly to all three
+component functions. The period default sits only on annuity_factor, which
+nothing in that chain calls.
+
+So this is not a valuation risk and no reported figure is affected. It remains
+worth fixing because a function called directly in analysis with a default that
+disagrees with the rest of the model is how a wrong number reaches a report.
+Still OPEN, downgraded from Day 15 priority.
+
+
 ### F30: valuation.py imports membership.py
 
 Raised Day 13. Status: OPEN, decision scheduled Day 15.
@@ -1746,6 +1791,21 @@ call gives 0.20315906133404954 against a correct 0.653876936215243.
 Now covered by test_cohort_survival_matches_improved_force. Docstring should
 state the convention explicitly.
 
+### F34: the three headline figures are rounded independently
+
+Liability 101,964,868.19, assets 94,317,503.07, deficit 7,647,365.11. Each is a
+correct rounding of its own unrounded value, but the subtraction does not work on
+the face of the table: .19 less .07 is .12, not .11. A trustee reading the table
+will stop on this. Compute all three from unrounded values and round once at
+display. Report presentation only, no figure is wrong.
+
+### F35: docstring defects in valuation.py
+
+liability_duration has an empty docstring. Four typos in docstrings that a reader
+will see: diveded and sperate in funding_position, assumtions and Recomputating
+in stress_table, wihtout and defaut and seperate in stressed_liability. Grouped
+with the F32 and F33 housekeeping.
+
 ---
 
 ## Limitations
@@ -1783,6 +1843,30 @@ Accumulating for the report's limitations section, Days 22 to 23.
   above is a period or a cohort one. If cohort, part of what was attributed to
   Gompertz-Makeham functional form is actually the period basis. To be checked
   on Day 15 now that both bases are running.
+- CORRECTION (Day 19) to the old age flattening limitation above.
+  The 3 to 4 per cent national comparison figure was never checked for basis, as
+  flagged when the limitation was written. Checked now. The cohort basis gives
+  35_p_65 = 0.03894333918990837 for males, which sits inside the 3 to 4 per cent
+  range. The period basis gives 0.00910867620239309.    
+
+  If the national figure is a cohort or projected one, the model does not disagree
+  with it at all and the gap is the mortality basis rather than the Gompertz
+  Makeham functional form.
+    
+  The claim that old age flattening accounts for most of the half year life
+  expectancy shortfall is therefore withdrawn as unproven. The shortfall itself
+  stands: 18.264535919118817 against a published ONS period figure of 18.73, both
+  on a period basis, correctly compared.
+    
+  The flattening limitation itself is not withdrawn. It rests on the Day 5 residual
+  pattern and the visible flattening above 95 in the log mortality plot, which are
+  independent of this comparison. What is withdrawn is the attribution of a
+  specific quantity to it.
+
+  The terminal age comparison promised in the bullet above is also now done.
+  Pensioner liability at terminal age 120 is 51,480,005.76983021 and at 110 is
+  51,479,830.72489869, a difference of 175.04 or 0.00034 per cent. Pensioners
+  only. The bias direction stated above is unchanged, the magnitude is negligible.
 - The Gompertz-Makeham residuals show a systematic wave rather than random
   scatter. Observed minus fitted ln(mu) is negative at ages 50 to 54, positive
   at 55 to 70, negative at 71 to 86, positive at 87 to 97, and negative at 98 to
@@ -1892,6 +1976,9 @@ contributions, both already documented before this result was seen:
    quantified on Day 5: the fitted model gives 35_p_65 = 0.0091 for males
    against a national life table figure nearer 3 to 4 per cent. This
    accounts for most of the half year.
+
+   WITHDRAWN Day 19, see the correction in Limitations. The half year shortfall
+   stands, the attribution of it to old age flattening does not.
 
 Consequence for the valuation: understating survival understates liability.
 The shortfall is concentrated at very old ages, which are heavily
@@ -2526,3 +2613,57 @@ was written with a fixed age, which is F33 above, and the recorded value
 value. Both were diagnosed from the numbers rather than guessed at, and the
 wrong figure of 0.20315906133404954 was reproduced exactly from the
 hypothesis before the fix was applied.
+
+## Day 19, Sunday 16 August
+
+Audit day. No new model code. Went through all six handovers and both prose
+files checking that every stated figure had actually been computed.
+
+Cleared four open questions against the status index. F23 is closed on both
+sides, Day 13 for pensioners and Day 14 for deferreds, and the Day 17 handover
+was wrong to list the pensioner side as unconfirmed. The duplicate Concentration
+heading in the report notes was already fixed. F29 and the old age flattening
+basis check were both scheduled for Day 15 and both silently dropped.
+
+Fixed the missing status cell on the F33 row of the status index.
+
+Four figures in report/notes_for_report.md turned out to be asserted rather than
+computed. Details under Flags and Limitations.
+
+Terminal age comparison finally computed. Pensioner liability at terminal age
+120 is 51,480,005.76983021 and at 110 is 51,479,830.72489869, a difference of
+175.04 or 0.00034 per cent. At 105 it is 51,466,954.88228287. This is a better
+justification for D10 than the survival probability was, because it measures the
+effect on the thing that matters. Pensioners only, the full scheme figure needs
+the deferred and spouse components.
+
+Lesson worth recording: Day 15 was deliberately overloaded and it is the day
+that lost work. Nothing errored, so nothing surfaced. Both dropped items were
+found by audit, not by the code.
+
+## Day 20, Monday 17 August
+
+Deployment day. Brought forward from the plan because it needs a reliable
+connection and the rest of the week is travel.
+
+Wrote requirements.txt with five pinned versions: numpy 2.4.6, pandas 3.0.3,
+scipy 1.17.1, matplotlib 3.11.0, streamlit 1.58.0. Pinned exactly rather than
+loosely so the deployed build matches what the model was developed against.
+
+Built dashboard/app.py as a deployment check rather than the dashboard: prints
+the five package versions and the shape of each of the three committed CSVs.
+The four package imports are deliberate even though not all are used, so a
+missing package fails immediately with a clear error.
+
+Local run failed first time on a broken pyarrow install, a protobuf symbol
+mismatch between conda and pip native libraries. Fixed with
+pip install --force-reinstall pyarrow. Nothing to do with the model, but it
+would have blocked every table and chart in the dashboard.
+
+Deployed to Streamlit Cloud on Python 3.11 from dashboard/app.py. Live and
+returning (79, 3), (2, 7) and (1000, 6). The pinned versions resolved on Linux
+without loosening.
+
+Added scheme_assets to valuation.py. See D42.
+
+Progress 66 to 71 per cent.
