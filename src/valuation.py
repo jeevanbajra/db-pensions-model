@@ -379,6 +379,23 @@ def funding_position(total_liability, assets):
     deficit = total_liability - assets
     return funding_ratio, deficit
 
+def scheme_assets(members, params, curve, funding_level=INITIAL_FUNDING_LEVEL):
+    """
+    Here, assets are derived once at the valuation date on central basis.
+    It returns the assets as a fixed amount in pounds, which is run against
+    every stress and is what lets the funding ratio move.
+    The 92.5% is a chosen input as appose to a measurement as the model is synthetic.
+    
+    Parameters: 
+    members, params, curve
+    
+    Returns:
+    fixed assets in pounds.
+    """
+    liab, _ = total_liability(members, params, curve)
+    assets = liab*funding_level
+    return assets
+
 
 def total_liability(members, params, curve, frequency=12, cpi=CPI,
                     revaluation=REVALUATION_RATE,
