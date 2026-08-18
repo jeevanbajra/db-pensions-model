@@ -96,9 +96,10 @@ track materiality, not the effort that went into the decision.
 
 ### Mortality
 
-Over ages 65 to 85 the senescent Gompertz term accounts for 98 per cent of the
-accumulated force of mortality: 0.6405 against 0.0386 for the Makeham constant.
-Ageing does essentially all the work at pensioner ages and background mortality
+Over ages 65 to 85 the senescent Gompertz term accounts for 94.3 per cent of the
+accumulated force of mortality: 0.6167 against 0.0371 for the Makeham constant.
+At age 85 itself, it is 97.8 per cent of the force of that moment. The share rises 
+with age. Ageing does essentially all the work at pensioner ages and background mortality
 is a rounding error. Useful for explaining in plain words what the three fitted
 parameters are actually doing.
 
@@ -118,7 +119,8 @@ applied afterwards. The conventional adjustment of adding roughly 11/24 to an
 annual-in-advance annuity was computed as a check on the direct calculation
 rather than used in place of it. Modelling the payments directly costs nothing
 in a vectorised implementation and removes an approximation that would
-otherwise need defending.
+otherwise need defending. the residual is -0.004403522708852747, which is
+0.03658190991440318 per cent of the annuity.
 
 ### Discount rates beyond 40 years
 
@@ -162,7 +164,10 @@ CMI model vary improvement by age and by year and would be used in practice.
 
 The model assumes no member survives beyond age 120. Some cut-off is needed to
 make the calculation finite. The chance of reaching 120 under this basis is
-around three in a billion, so the choice has almost no effect on the answer.
+around 1 in 93 billion for a male and 1 in 16 billion for a female,
+so the choice has almost no effect on the answer. Cutting the terminal age
+from 120 down to 110 changes the pensioner liability by 175.04 or 0.00034%
+(pensioners only).
 
 ### Spouses' pensions
 
@@ -326,7 +331,9 @@ The ratio varies substantially by age and sex. The youngest male pensioner at
 2.52. Mean values are 10.49 male and 11.78 female, a ratio of 1.12. That
 difference is entirely the mortality basis: the same benefit costs 12 per cent
 more for a woman than for a man of the same age because she is expected to
-receive it for longer.
+receive it for longer. The above averages are ones that are against two different
+age profiles. If it were at a common age, the gap runs from 9.7 per cent at 65
+to 14.4 per cent at 80- not one number and it widens with age.
 
 ### The cost of a pension at retirement is not the cost of a pension in payment
 
@@ -502,8 +509,6 @@ it is one of the smallest effects.
 
 ## Limitations and Further Work
 
-See the Limitations section of notes.md, which is already structured for this.
-Only additions and rewordings go here.
 
 ### The membership is not real
 
