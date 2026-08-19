@@ -12,7 +12,13 @@ Results, Sensitivity Analysis, Limitations and Further Work.
 
 ## Executive Summary
 
-Nothing yet. Written last.
+### Proportion, and where the judgement actually sits
+
+The interpolation choice (D16) moves a discount factor by 0.0084 per cent. The
+extrapolation choice above 40 years (D19) moves one by roughly 100 per cent.
+Four orders of magnitude apart. One deserves a sentence, the other a section.
+This is the organising principle for the assumptions section: length should
+track materiality, not the effort that went into the decision.
 
 ---
 
@@ -86,13 +92,6 @@ averaged into it stops exceeding it. Worth stating because it demonstrates the
 data is internally coherent rather than broken, and because the inverted long
 end looks like an error to a reader who has not seen this.
 
-### Proportion, and where the judgement actually sits
-
-The interpolation choice (D16) moves a discount factor by 0.0084 per cent. The
-extrapolation choice above 40 years (D19) moves one by roughly 100 per cent.
-Four orders of magnitude apart. One deserves a sentence, the other a section.
-This is the organising principle for the assumptions section: length should
-track materiality, not the effort that went into the decision.
 
 ### Mortality
 

@@ -64,6 +64,7 @@ Conventions used in this file:
 | D40 | Scope frozen | Day 17 |
 | D41 | Life expectancy quoted on both bases | Day 17 |
 | D42 | Assets are derived in the model, not typed into a notebook | Day 20 |
+| D43 | Discount rate basis, gilt yields (Day 22, recorded retrospectively) | Day 22 |
 
 ### Flags
 
@@ -1165,6 +1166,42 @@ scheme's audited value.
 
 Same class of problem as D18 and F17 and the last one of its kind: a figure the
 model depended on that lived outside the model.
+
+### D43: Discount rate basis, gilt yields (Day 22, recorded retrospectively)
+
+Recorded on Day 22 after the report draft found it undocumented. The choice was
+made on Day 1 and every subsequent gilt curve decision (D16 to D19) presupposes
+it, but the reasoning was never written down. Recording it now rather than
+reconstructing it later.
+
+Liabilities are discounted at nominal gilt yields, with no margin added.
+
+A discount rate answers the question of what the promised pensions are worth
+today. Gilt yields are the return available without taking investment risk, so
+discounting at them values the promise at roughly what it would cost to meet
+with low risk assets. The liability then depends on the benefits promised and
+the members' expected lifetimes, and not on a view about investment returns.
+
+The alternative is to discount at an expected return on the scheme's actual
+assets, which in UK practice is usually expressed as gilts plus a margin
+reflecting the investment strategy. That produces a smaller liability and a
+better funding level. The improvement comes from assuming that investment risk
+pays off, not from anything changing about the pensions promised. If the return
+does not materialise, the deficit was always there and was simply not being
+reported.
+
+A pure gilt basis is at the prudent end of UK practice. I chose it because it is
+the simplest position I can defend: any margin would require a view on the
+scheme's investment strategy and expected returns, and the scheme is synthetic
+with no assets specified, so I would be picking a number I have no basis for.
+
+Consequence: the funding level of 92.5 per cent is on a stronger basis than most
+published scheme funding levels, which are usually quoted on a gilts plus basis.
+This is not directly comparable to them and the report should say so.
+
+The margin itself is a natural sensitivity: discounting at gilts plus 1 per cent
+would show how much of the deficit is a consequence of the basis rather than the
+benefits. Not run, noted as further work.
 
 ---
 
@@ -2666,4 +2703,41 @@ without loosening.
 
 Added scheme_assets to valuation.py. See D42.
 
-Progress 66 to 71 per cent.
+
+## Day 21, Tuesday 18 August
+
+Travel to Cornwall, worked from the car on an intermittent connection.
+
+Made the five corrections to report/notes_for_report.md that the Day 19 audit
+found: the terminal age survival figure, the senescent share, the male-female
+gap, the missing 11/24 residual, and the deleted note-to-self line. That closes
+the last of the unbacked claims in the report material.
+
+Decided the report will be markdown in report/, not a Word document. Writing
+time is the scarce thing this week and formatting is not, and a markdown report
+in a public repo is more likely to be read than a file someone has to download.
+Word remains possible later if wanted.
+
+Drafted Purpose and scope, and The scheme. Written in the first person for
+choices made, since this is a portfolio piece and the reasoning is the point.
+Register to stay consistent through the whole document.
+
+## Day 22, Wednesday 19 August
+
+Short evening session after a beach day.
+
+Drafted the Discount rate subsection of Assumptions. Covers the basis, the
+source, the continuous compounding convention with the finite difference check
+that confirms it from the data, the D16 interpolation choice with the 0.674
+basis point maximum difference, and a passage explaining why the long end is
+inverted.
+
+The curve coherence material turned out to be an observation rather than an
+assumption. Kept, but reframed as pre-empting a reader who sees forwards below
+spots and assumes the data is broken.
+
+Recorded D43. Writing the section made it clear that the reason for discounting
+at gilt yields rather than an expected asset return had never been written down
+anywhere. D5 covers the compounding convention only, and D16 to D19 all
+presuppose the gilt basis without establishing it. This is the most consequential
+assumption in the valuation and it was undocumented for three weeks.
