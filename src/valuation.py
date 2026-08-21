@@ -10,14 +10,15 @@ from functools import partial
 import pandas as pd
 
 from mortality import (survival_probability, survival_probability_cohort,
-                       UPPER_LIMITING_AGE, IMPROVEMENT_RATE, scale_params)
+                       UPPER_LIMITING_AGE, IMPROVEMENT_RATE, scale_params,
+                       IMPROVEMENT_HIGH, IMPROVEMENT_LOW)
 from discounting import load_curve, discount_factor, shift_curve
 from membership import VALUATION_DATE, NORMAL_RETIREMENT_AGE
 
 
 # Payment timing, D22. Annually in advance.
 # Monthly in advance is the real-world basis; see F21.
-PAYMENTS_IN_ADVANCE = True
+PAYMENTS_IN_ADVANCE = True   # documents the convention; payment_times builds from t=0
 CPI = 0.03 #D25
 LPI_CAP = 0.05 #D7
 LPI_FLOOR = 0.0 #D7
@@ -493,7 +494,9 @@ def stress_table(members, params, curve, assets):
     stresses = [("central", {}), ("rates -1.0%", {"rate_shift":-0.01}),("rates +1.0%", {"rate_shift":0.01}),
                 ("mortality +10%", {"mortality_multiplier": 1.10}),
                 ("mortality -10%", {"mortality_multiplier": 0.90}),
-                ("improvement 1.75%", {"improvement":0.0175}), ("cpi +0.5%", {"cpi":0.035})]
+                ("improvement 1.75%", {"improvement": IMPROVEMENT_HIGH}),
+                ("improvement 0.75%", {"improvement": IMPROVEMENT_LOW}),
+                ("cpi +0.5%", {"cpi": 0.035})]
     rows = []
     base = None
     for label, kwargs in stresses:
